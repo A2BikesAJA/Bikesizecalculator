@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A2 Bikes – Size Calculator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,700;9..144,900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<style>
+  /* ── Scoped reset ── */
+  .a2-size-calc *, .a2-size-calc *::before, .a2-size-calc *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  .a2-size-calc {
+    font-family: 'Fraunces', Georgia, serif;
+    max-width: 720px;
+    margin: 0 auto;
+    background: #fafafa;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  .a2-size-calc__header {
+    background: #000;
+    color: #fff;
+    padding: 16px 28px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* ── Body layout ── */
+  .a2-size-calc__body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+  }
+
+  /* ── Left: inputs ── */
+  .a2-size-calc__inputs {
+    flex: 1 1 300px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .a2-size-calc__field-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 6px;
+    letter-spacing: 0.03em;
+  }
+
+  .a2-size-calc__height-row {
+    display: flex;
+    gap: 10px;
+  }
+  .a2-size-calc__height-row select { flex: 1; }
+
+  .a2-size-calc select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 15px;
+    font-family: 'Fraunces', Georgia, serif;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    color: #111;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .a2-size-calc select:focus {
+    outline: none;
+    border-color: #C51C26;
+  }
+
+  .a2-size-calc__btn {
+    background: #000;
+    color: #fff;
+    border: none;
+    padding: 13px 24px;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: 'Fraunces', Georgia, serif;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.25s ease, transform 0.15s ease;
+    width: 100%;
+    margin-top: 4px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .a2-size-calc__btn:hover {
+    background: #C51C26;
+  }
+  .a2-size-calc__btn:active {
+    transform: scale(0.98);
+    background: #C51C26;
+  }
+
+  /* ── Right: results ── */
+  .a2-size-calc__results {
+    flex: 1 1 280px;
+    padding: 28px;
+    background: #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 260px;
+  }
+
+  .a2-size-calc__results-placeholder {
+    color: #999;
+    font-size: 15px;
+    line-height: 1.5;
+    text-align: center;
+    padding: 20px 10px;
+  }
+
+  /* Sized result */
+  .a2-size-calc__results-content {
+    display: none;
+  }
+  .a2-size-calc__results-content.is-visible {
+    display: block;
+    animation: a2FadeIn 0.35s ease;
+  }
+
+  @keyframes a2FadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .a2-size-calc__size-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+  .a2-size-calc__size-value {
+    font-size: 36px;
+    font-weight: 900;
+    color: #C51C26;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .a2-size-calc__model-note {
+    font-size: 14px;
+    color: #444;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  .a2-size-calc__fit-note {
+    font-size: 13px;
+    color: #555;
+    line-height: 1.5;
+    border-top: 1px solid #ddd;
+    padding-top: 12px;
+    margin-top: 4px;
+  }
+
+  /* Out-of-range result */
+  .a2-size-calc__out-of-range {
+    display: none;
+  }
+  .a2-size-calc__out-of-range.is-visible {
+    display: block;
+    animation: a2FadeIn 0.35s ease;
+  }
+  .a2-size-calc__out-of-range-heading {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 10px;
+  }
+  .a2-size-calc__out-of-range-msg {
+    font-size: 14px;
+    color: #444;
+    line-height: 1.6;
+  }
+  .a2-size-calc__out-of-range-msg a {
+    color: #C51C26;
+    text-decoration: underline;
+    font-weight: 600;
+  }
+
+  /* Error state */
+  .a2-size-calc__error {
+    color: #C51C26;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    padding: 10px;
+    display: none;
+  }
+  .a2-size-calc__error.is-visible {
+    display: block;
+    animation: a2FadeIn 0.25s ease;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .a2-size-calc__body {
+      flex-direction: column;
+    }
+    .a2-size-calc__results {
+      min-height: auto;
+      padding: 24px;
+    }
+    .a2-size-calc__inputs {
+      padding: 24px;
+    }
+    .a2-size-calc__header {
+      padding: 14px 20px;
+      font-size: 18px;
+    }
+  }
+</style>
+
+<div class="a2-size-calc" id="a2SizeCalc">
+  <!-- Header -->
+  <div class="a2-size-calc__header">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C51C26" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2z"/><line x1="2" y1="4" x2="22" y2="4"/><line x1="4" y1="4" x2="4" y2="16"/><line x1="20" y1="4" x2="20" y2="16"/><line x1="12" y1="4" x2="12" y2="8"/><path d="M4 16l8 -4 8 4"/></svg>
+    Find Your Perfect Size
+  </div>
+
+  <div class="a2-size-calc__body">
+    <!-- Inputs -->
+    <div class="a2-size-calc__inputs">
+      <div class="a2-size-calc__field-group">
+        <label>Which Bike?</label>
+        <select id="a2BikeModel">
+          <option value="sp">The SP — Triathlon</option>
+          <option value="rogue">The Rogue — Road / Gravel</option>
+        </select>
+      </div>
+
+      <div class="a2-size-calc__field-group">
+        <label>Your Height</label>
+        <div class="a2-size-calc__height-row">
+          <select id="a2HeightFeet">
+            <option value="" disabled selected>Feet</option>
+            <option value="4">4 ft</option>
+            <option value="5">5 ft</option>
+            <option value="6">6 ft</option>
+            <option value="7">7 ft</option>
+          </select>
+          <select id="a2HeightInches">
+            <option value="" disabled selected>Inches</option>
+            <option value="0">0 in</option>
+            <option value="1">1 in</option>
+            <option value="2">2 in</option>
+            <option value="3">3 in</option>
+            <option value="4">4 in</option>
+            <option value="5">5 in</option>
+            <option value="6">6 in</option>
+            <option value="7">7 in</option>
+            <option value="8">8 in</option>
+            <option value="9">9 in</option>
+            <option value="10">10 in</option>
+            <option value="11">11 in</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="a2-size-calc__field-group">
+        <label>Your Inseam (optional)</label>
+        <select id="a2Inseam">
+          <option value="" selected>I don't know</option>
+          <option value="27">27″</option>
+          <option value="28">28″</option>
+          <option value="29">29″</option>
+          <option value="30">30″</option>
+          <option value="31">31″</option>
+          <option value="32">32″</option>
+          <option value="33">33″</option>
+          <option value="34">34″</option>
+          <option value="35">35″</option>
+          <option value="36">36″</option>
+          <option value="37">37″</option>
+          <option value="38">38″</option>
+        </select>
+      </div>
+
+      <button type="button" class="a2-size-calc__btn" id="a2CalcBtn">See My Size</button>
+
+      <!-- Inline error (visible above fold on mobile) -->
+      <div class="a2-size-calc__error" id="a2Error"></div>
+    </div>
+
+    <!-- Results -->
+    <div class="a2-size-calc__results" id="a2ResultsPanel">
+      <div class="a2-size-calc__results-placeholder" id="a2Placeholder">
+        Select your bike and height, then hit <strong>See My Size</strong>.
+      </div>
+
+      <!-- Normal sized result -->
+      <div class="a2-size-calc__results-content" id="a2ResultContent">
+        <div class="a2-size-calc__size-label">Your Recommended Size</div>
+        <div class="a2-size-calc__size-value" id="a2SizeValue"></div>
+        <div class="a2-size-calc__model-note" id="a2ModelNote"></div>
+        <div class="a2-size-calc__fit-note" id="a2FitNote"></div>
+      </div>
+
+      <!-- Out-of-range result -->
+      <div class="a2-size-calc__out-of-range" id="a2OutOfRange">
+        <div class="a2-size-calc__out-of-range-heading" id="a2OorHeading"></div>
+        <div class="a2-size-calc__out-of-range-msg" id="a2OorMsg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ================================================================
+     A2 Bikes – Size Calculator v2
+     ----------------------------------------------------------------
+     • No inline handlers (Shopify / CSP safe)
+     • Out-of-range messaging for < 5'3" and > 6'5"
+     • Borderline heights recommend sizing up
+     • Inseam-aware: unusual inseam + borderline = stronger size-up
+     • Scrolls result into view on mobile after calculation
+     ================================================================ */
+  (function () {
+
+    /* ── SIZE CHART CONFIG ──────────────────────────────────────
+       Each entry: { min, max, size }
+       min/max are total inches (inclusive).
+       Entries must be in ascending order.
+       ────────────────────────────────────────────────────────── */
+    var SP_CHART = [
+      { min: 63, max: 64, size: 'XS' },   // 5'3" – 5'4"
+      { min: 65, max: 67, size: 'S'  },   // 5'5" – 5'7"
+      { min: 68, max: 70, size: 'M'  },   // 5'8" – 5'10"
+      { min: 71, max: 73, size: 'L'  },   // 5'11" – 6'1"
+      { min: 74, max: 77, size: 'XL' }    // 6'2" – 6'5"
+    ];
+
+    var ROGUE_CHART = [
+      { min: 63, max: 64, size: 'XS' },   // 5'3" – 5'4"
+      { min: 65, max: 67, size: 'S'  },   // 5'5" – 5'7"
+      { min: 68, max: 70, size: 'M'  },   // 5'8" – 5'10"
+      { min: 71, max: 73, size: 'L'  },   // 5'11" – 6'1"
+      { min: 74, max: 77, size: 'XL' }    // 6'2" – 6'5"
+    ];
+
+    // Serviceable range (total inches)
+    var MIN_HEIGHT = 63; // 5'3"
+    var MAX_HEIGHT = 77; // 6'5"
+
+    /* Average inseam by height (inches). Used to detect "unusual"
+       inseam lengths. Values are approximate population medians. */
+    var AVG_INSEAM = {
+      63:29.5, 64:30, 65:30.5, 66:31, 67:31.5,
+      68:32, 69:32.5, 70:33, 71:33.5, 72:34,
+      73:34.5, 74:35, 75:35.5, 76:36, 77:36.5
+    };
+    var INSEAM_TOLERANCE = 1.5; // inches from average before "unusual"
+
+    /* ── ELEMENT REFS ── */
+    var modelEl      = document.getElementById('a2BikeModel');
+    var feetEl       = document.getElementById('a2HeightFeet');
+    var inchesEl     = document.getElementById('a2HeightInches');
+    var inseamEl     = document.getElementById('a2Inseam');
+    var btnEl        = document.getElementById('a2CalcBtn');
+    var placeholder  = document.getElementById('a2Placeholder');
+    var errorEl      = document.getElementById('a2Error');
+    var resultBox    = document.getElementById('a2ResultContent');
+    var sizeVal      = document.getElementById('a2SizeValue');
+    var modelNote    = document.getElementById('a2ModelNote');
+    var fitNote      = document.getElementById('a2FitNote');
+    var oorBox       = document.getElementById('a2OutOfRange');
+    var oorHeading   = document.getElementById('a2OorHeading');
+    var oorMsg       = document.getElementById('a2OorMsg');
+    var resultsPanel = document.getElementById('a2ResultsPanel');
+
+    /* ── HELPERS ── */
+    function hideAll() {
+      placeholder.style.display = 'none';
+      errorEl.classList.remove('is-visible');
+      resultBox.classList.remove('is-visible');
+      oorBox.classList.remove('is-visible');
+    }
+
+    function showError(msg) {
+      hideAll();
+      errorEl.textContent = msg;
+      errorEl.classList.add('is-visible');
+    }
+
+    function showAnimated(el) {
+      el.classList.remove('is-visible');
+      void el.offsetWidth; // force reflow for re-trigger
+      el.classList.add('is-visible');
+    }
+
+    function scrollToResults() {
+      /* On mobile the results panel stacks below the inputs —
+         scroll it into view so the user sees the answer. */
+      if (window.innerWidth <= 600) {
+        setTimeout(function () {
+          resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 80);
+      }
+    }
+
+    function fmtHeight(totalIn) {
+      return Math.floor(totalIn / 12) + '\u2032' + (totalIn % 12) + '\u2033';
+    }
+
+    /* ── LOOKUP ── */
+    function lookupSize(chart, h) {
+      for (var i = 0; i < chart.length; i++) {
+        if (h >= chart[i].min && h <= chart[i].max) {
+          return { index: i, size: chart[i].size };
+        }
+      }
+      return null;
+    }
+
+    function isBorderline(chart, h) {
+      /* A height is "borderline" if it sits at the top edge of its
+         size bracket — i.e. the next inch up would be a new size. */
+      for (var i = 0; i < chart.length - 1; i++) {
+        if (h === chart[i].max) return true;
+      }
+      return false;
+    }
+
+    function nextSizeUp(chart, idx) {
+      if (idx < chart.length - 1) return chart[idx + 1].size;
+      return null;
+    }
+
+    /* ── MAIN CALCULATION ── */
+    function calculate() {
+      var feet   = parseInt(feetEl.value, 10);
+      var inches = parseInt(inchesEl.value, 10);
+
+      /* Validation */
+      if (isNaN(feet) || isNaN(inches)) {
+        showError('Please select your height above.');
+        return;
+      }
+
+      var totalIn  = feet * 12 + inches;
+      var bike     = modelEl.value;
+      var chart    = bike === 'sp' ? SP_CHART : ROGUE_CHART;
+      var bikeName = bike === 'sp' ? 'The SP' : 'The Rogue';
+
+      hideAll();
+
+      /* ── Out of range: too short ── */
+      if (totalIn < MIN_HEIGHT) {
+        oorHeading.textContent = 'We\u2019d Love to Help You Find the Right Fit';
+        oorMsg.innerHTML =
+          'Our current ' + bikeName + ' lineup is designed for riders 5\u20323\u2033 and taller. ' +
+          'At ' + fmtHeight(totalIn) + ', we want to make sure you get a bike that fits safely and performs beautifully. ' +
+          'Reach out to us at <a href="mailto:info@a2bikes.com">info@a2bikes.com</a> \u2014 we\u2019ll help you explore your options.';
+        showAnimated(oorBox);
+        scrollToResults();
+        trackKlaviyo('Size Calculator', {
+          bike_model: bikeName,
+          height: fmtHeight(totalIn),
+          height_inches: totalIn,
+          recommended_size: 'Out of Range',
+          result_type: 'too_short',
+          tags: ['SizeCalculator', 'OutOfRange']
+        });
+        return;
+      }
+
+      /* ── Out of range: too tall ── */
+      if (totalIn > MAX_HEIGHT) {
+        oorHeading.textContent = 'We\u2019d Love to Help You Find the Right Fit';
+        oorMsg.innerHTML =
+          'Our current ' + bikeName + ' lineup is designed for riders up to 6\u20325\u2033. ' +
+          'At ' + fmtHeight(totalIn) + ', we want to make sure you get a bike that fits safely and performs beautifully. ' +
+          'Reach out to us at <a href="mailto:info@a2bikes.com">info@a2bikes.com</a> \u2014 we\u2019ll help you explore your options.';
+        showAnimated(oorBox);
+        scrollToResults();
+        trackKlaviyo('Size Calculator', {
+          bike_model: bikeName,
+          height: fmtHeight(totalIn),
+          height_inches: totalIn,
+          recommended_size: 'Out of Range',
+          result_type: 'too_tall',
+          tags: ['SizeCalculator', 'OutOfRange']
+        });
+        return;
+      }
+
+      /* ── Normal lookup ── */
+      var match = lookupSize(chart, totalIn);
+      if (!match) {
+        showError('Something went wrong \u2014 please try again.');
+        return;
+      }
+
+      var size      = match.size;
+      var border    = isBorderline(chart, totalIn);
+      var upSize    = nextSizeUp(chart, match.index);
+      var inseam    = parseInt(inseamEl.value, 10);
+      var hasInseam = !isNaN(inseam);
+
+      /* Inseam analysis */
+      var avgIns       = AVG_INSEAM[totalIn] || 32;
+      var inseamDelta  = hasInseam ? inseam - avgIns : 0;
+      var inseamLong   = hasInseam && inseamDelta > INSEAM_TOLERANCE;
+      var inseamShort  = hasInseam && inseamDelta < -INSEAM_TOLERANCE;
+      var inseamNormal = hasInseam && !inseamLong && !inseamShort;
+
+      /* ── Build recommendation text ── */
+      var sizeText = size;
+      var noteText = bikeName + ' in size ' + size + ' \u2014 built for riders around ' + fmtHeight(totalIn) + '.';
+      var fitText  = '';
+
+      if (border && upSize) {
+        /* ---- BORDERLINE HEIGHT ---- */
+        if (inseamLong) {
+          /* Borderline + long inseam → strong size-up */
+          sizeText = size + ' / ' + upSize;
+          noteText = bikeName + ' in size ' + size + ' or ' + upSize + ' for ' + fmtHeight(totalIn) + '.';
+          fitText  = 'You\u2019re right at the boundary between ' + size + ' and ' + upSize +
+                     ', and your inseam is longer than average for your height. We strongly recommend sizing up to ' +
+                     upSize + ' for a more comfortable ride with better leg extension.';
+        } else if (inseamShort) {
+          /* Borderline + short inseam → stay at current */
+          fitText = 'You\u2019re at the top of the ' + size + ' range, but your inseam is shorter than average for your height. ' +
+                    'Staying with ' + size + ' should give you the best fit and standover clearance.';
+        } else {
+          /* Borderline + normal or no inseam → recommend sizing up */
+          sizeText = size + ' / ' + upSize;
+          noteText = bikeName + ' in size ' + size + ' or ' + upSize + ' for ' + fmtHeight(totalIn) + '.';
+          fitText  = 'Your height puts you right on the border between ' + size + ' and ' + upSize +
+                     '. We recommend sizing up to ' + upSize + ' for a more comfortable ride.';
+          if (!hasInseam) {
+            fitText += ' For an even more precise recommendation, try adding your inseam measurement above.';
+          }
+        }
+      } else {
+        /* ---- NOT BORDERLINE ---- */
+        if (inseamLong && upSize) {
+          fitText = 'Your inseam is longer than average for your height. You may want to consider sizing up to ' + upSize +
+                    ' for extra leg extension and a more comfortable ride. Otherwise, ' + size + ' with seatpost adjustment will work well.';
+        } else if (inseamShort) {
+          fitText = 'Your inseam is a bit shorter than average for your height \u2014 ' + size +
+                    ' is the right call. Our full adjustability system will dial in your fit perfectly.';
+        } else if (inseamNormal) {
+          fitText = 'Your inseam is right in the sweet spot for this size. You\u2019re good to go.';
+        } else {
+          fitText = 'For an even more precise fit, try adding your inseam measurement above and re-run. ' +
+                    'Every A2 bike ships with our full adjustability system, so you\u2019ll dial it in perfectly.';
+        }
+      }
+
+      /* ── Display ── */
+      sizeVal.textContent   = sizeText;
+      modelNote.textContent = noteText;
+      fitNote.textContent   = fitText;
+      showAnimated(resultBox);
+      scrollToResults();
+
+      /* ── Track in Klaviyo ── */
+      var klavProps = {
+        bike_model: bikeName,
+        height: fmtHeight(totalIn),
+        height_inches: totalIn,
+        recommended_size: size,
+        displayed_size: sizeText,
+        is_borderline: border,
+        tags: ['SizeCalculator', size]
+      };
+      if (hasInseam) {
+        klavProps.inseam = inseam;
+        klavProps.inseam_vs_average = inseamLong ? 'long' : (inseamShort ? 'short' : 'normal');
+      }
+      if (border && upSize) {
+        klavProps.size_up_suggestion = upSize;
+      }
+      trackKlaviyo('Size Calculator', klavProps);
+    }
+
+    /* ── KLAVIYO EVENT TRACKING ── */
+    function trackKlaviyo(eventName, props) {
+      try {
+        /* Modern Klaviyo JS SDK (v3+) */
+        if (window.klaviyo && typeof window.klaviyo.track === 'function') {
+          window.klaviyo.track(eventName, props);
+          return;
+        }
+        /* Legacy Klaviyo onsite (_learnq) */
+        if (window._learnq && typeof window._learnq.push === 'function') {
+          window._learnq.push(['track', eventName, props]);
+          return;
+        }
+      } catch (e) {
+        /* Silently fail — don't break the calculator */
+      }
+    }
+
+    /* ── EVENT BINDING ── */
+    btnEl.addEventListener('click', calculate);
+
+    /* Also fire on touchend for iOS reliability */
+    btnEl.addEventListener('touchend', function (e) {
+      e.preventDefault();
+      calculate();
+    });
+
+  })();
+</script>
+
+</body>
+</html>
