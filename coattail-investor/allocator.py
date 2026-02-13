@@ -245,6 +245,20 @@ _KNOWN_TICKER_MAP = {
 }
 
 
+# Map share-class variants to a single canonical ticker.
+# When 13F filings list both Class A and Class C of Alphabet, for example,
+# we merge them into one position under the more common ticker.
+_CANONICAL_TICKER = {
+    "GOOG": "GOOGL",       # Alphabet Class C → Class A
+    "BRK-A": "BRK-B",      # Berkshire Class A → Class B (more accessible)
+    "LSXMK": "LSXMA",      # Liberty Media Class C → Class A
+    "FOXA": "FOX",          # Fox Corp Class A → Class B
+    "DISCA": "DISCK",       # Discovery (legacy, now WBD)
+    "NWSA": "NWS",          # News Corp Class A → Class B
+    "VIACA": "VIAC",        # ViacomCBS (legacy, now PARA)
+}
+
+
 def _friendly_type(quote_type: str) -> str:
     """Convert yfinance quoteType to a friendly label."""
     return {
@@ -408,13 +422,39 @@ def allocate_portfolio(
             })
             continue
 
+        # Map to canonical ticker to avoid duplicates (e.g. GOOG → GOOGL)
+        canonical = _CANONICAL_TICKER.get(result["ticker"], result["ticker"])
+
         # Update the pick with the validated ticker and price
         enriched = dict(item)
-        enriched["ticker"] = result["ticker"]
+        enriched["ticker"] = canonical
         enriched["_resolved_price"] = result["price"]
         enriched["_security_type"] = result["security_type"]
         enriched["_long_name"] = result["long_name"]
         resolved_picks.append(enriched)
+
+    # ── Deduplicate by ticker (merge share classes) ───────────────────
+    seen: dict[str, dict] = {}
+    for pick in resolved_picks:
+        ticker = pick["ticker"]
+        if ticker in seen:
+            existing = seen[ticker]
+            existing["consensus_score"] = (
+                existing.get("consensus_score", 0) + pick.get("consensus_score", 0)
+            )
+            existing["num_holders"] = max(
+                existing.get("num_holders", 0), pick.get("num_holders", 0)
+            )
+            combined_holders = list(
+                dict.fromkeys(existing.get("holders", []) + pick.get("holders", []))
+            )
+            existing["holders"] = combined_holders
+            existing["avg_weight"] = (
+                existing.get("avg_weight", 0) + pick.get("avg_weight", 0)
+            )
+        else:
+            seen[ticker] = pick
+    resolved_picks = list(seen.values())
 
     # ── Filter picks ─────────────────────────────────────────────────────
     picks = list(resolved_picks)
