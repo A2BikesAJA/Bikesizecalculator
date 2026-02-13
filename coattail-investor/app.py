@@ -277,7 +277,11 @@ def simulate_page():
 
     report_data = None
     error = None
-    form_data = {"dollars": 20000, "years": 5, "simulations": 10000, "seed": 42}
+    form_data = {
+        "dollars": 20000, "years": 5, "simulations": 10000, "seed": 42,
+        "monthly_contribution": 0, "dividend_yield": 1.5,
+        "dividend_mode": "reinvest",
+    }
 
     if request.method == "POST":
         try:
@@ -285,22 +289,33 @@ def simulate_page():
             years = int(request.form.get("years", 5))
             simulations = int(request.form.get("simulations", 10000))
             seed = int(request.form.get("seed", 42))
+            monthly_contribution = float(request.form.get("monthly_contribution", 0))
+            dividend_yield_pct = float(request.form.get("dividend_yield", 1.5))
+            dividend_mode = request.form.get("dividend_mode", "reinvest")
 
             form_data = {
                 "dollars": dollars,
                 "years": years,
                 "simulations": simulations,
                 "seed": seed,
+                "monthly_contribution": monthly_contribution,
+                "dividend_yield": dividend_yield_pct,
+                "dividend_mode": dividend_mode,
             }
 
             if dollars <= 0:
                 error = "Investment amount must be positive."
+            elif monthly_contribution < 0:
+                error = "Monthly contribution cannot be negative."
             else:
                 report = run_full_simulation(
                     initial=dollars,
                     years=years,
                     num_simulations=simulations,
                     seed=seed,
+                    monthly_contribution=monthly_contribution,
+                    dividend_yield=dividend_yield_pct / 100,  # convert pct to decimal
+                    dividend_mode=dividend_mode,
                 )
 
                 scenarios = []
@@ -312,6 +327,8 @@ def simulate_page():
                             "ending_value": y.ending_value,
                             "annual_return_pct": y.annual_return_pct,
                             "cumulative_return_pct": y.cumulative_return_pct,
+                            "contributions_this_year": y.contributions_this_year,
+                            "dividends_this_year": y.dividends_this_year,
                         }
                         for y in s.yearly
                     ]
@@ -326,12 +343,20 @@ def simulate_page():
                         "total_profit": s.total_profit,
                         "cagr": s.cagr,
                         "yearly": yearly,
+                        "total_contributions": s.total_contributions,
+                        "total_dividends": s.total_dividends,
+                        "total_invested": s.total_invested,
                     })
 
                 mc = report.monte_carlo
                 report_data = {
                     "initial_investment": report.initial_investment,
                     "years": report.years,
+                    "monthly_contribution": report.monthly_contribution,
+                    "dividend_yield": report.dividend_yield,
+                    "dividend_mode": report.dividend_mode,
+                    "total_contributions": report.total_contributions,
+                    "total_invested": report.total_invested,
                     "scenarios": scenarios,
                     "monte_carlo": {
                         "num_simulations": mc.num_simulations,
@@ -352,6 +377,10 @@ def simulate_page():
                         "median_path": mc.median_path,
                         "p25_path": mc.p25_path,
                         "p75_path": mc.p75_path,
+                        "total_contributions": mc.total_contributions,
+                        "total_invested": mc.total_invested,
+                        "total_dividends_median": mc.total_dividends_median,
+                        "contribution_path": mc.contribution_path,
                     },
                 }
         except ValueError:

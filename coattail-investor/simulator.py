@@ -18,6 +18,10 @@ Historical context (used to calibrate assumptions):
 The simulator uses these priors combined with user-tunable parameters to
 run thousands of randomised paths and summarise the probability distribution
 of outcomes.
+
+Supports:
+  - Dividend reinvestment (reinvest in same stock OR redistribute across portfolio)
+  - Regular periodic contributions (monthly/quarterly/annual)
 """
 
 import logging
@@ -63,6 +67,9 @@ DEFAULT_SIMULATIONS = 10_000
 DEFAULT_YEARS = 5
 QUARTERLY_REBALANCE_DRAG = 0.001  # 0.1% per quarter for turnover/slippage
 
+# Default dividend yield for consensus large-cap picks
+DEFAULT_DIVIDEND_YIELD = 0.015  # 1.5% annual
+
 
 # ─── Data Structures ─────────────────────────────────────────────────────────
 
@@ -74,6 +81,8 @@ class YearSnapshot:
     ending_value: float
     annual_return_pct: float
     cumulative_return_pct: float
+    contributions_this_year: float = 0.0
+    dividends_this_year: float = 0.0
 
 
 @dataclass
@@ -91,6 +100,9 @@ class ScenarioResult:
     total_profit: float
     cagr: float
     yearly: list[YearSnapshot]
+    total_contributions: float = 0.0
+    total_dividends: float = 0.0
+    total_invested: float = 0.0  # initial + contributions
 
 
 @dataclass
@@ -111,14 +123,19 @@ class MonteCarloResult:
     p95: float          # 95th percentile (best realistic)
     mean: float
     # Probability metrics
-    prob_profit: float          # P(ending > starting)
-    prob_double: float          # P(ending > 2x starting)
-    prob_loss_10pct: float      # P(loss > 10%)
-    prob_loss_25pct: float      # P(loss > 25%)
+    prob_profit: float          # P(ending > total_invested)
+    prob_double: float          # P(ending > 2x total_invested)
+    prob_loss_10pct: float      # P(loss > 10% of total_invested)
+    prob_loss_25pct: float      # P(loss > 25% of total_invested)
     # Year-by-year median path
     median_path: list[float]    # [year0_val, year1_val, ..., yearN_val]
     p25_path: list[float]
     p75_path: list[float]
+    # Contribution / dividend tracking
+    total_contributions: float = 0.0
+    total_invested: float = 0.0
+    total_dividends_median: float = 0.0
+    contribution_path: list[float] = field(default_factory=list)
 
 
 @dataclass
@@ -128,6 +145,12 @@ class SimulationReport:
     years: int
     scenarios: list[ScenarioResult]
     monte_carlo: MonteCarloResult
+    # Config echo
+    monthly_contribution: float = 0.0
+    dividend_yield: float = 0.0
+    dividend_mode: str = "reinvest"
+    total_contributions: float = 0.0
+    total_invested: float = 0.0
 
 
 # ─── Deterministic Scenario Projections ──────────────────────────────────────
@@ -141,35 +164,77 @@ def project_scenario(
     name: str = "custom",
     label: str = "Custom",
     description: str = "",
+    monthly_contribution: float = 0.0,
+    dividend_yield: float = 0.0,
+    dividend_mode: str = "reinvest",
 ) -> ScenarioResult:
     """
     Project a deterministic compound-growth path for a single scenario.
 
-    This is the "expected path" — no randomness, just compound growth at
-    the assumed annual return with quarterly rebalance drag.
+    Args:
+        monthly_contribution:  Dollar amount added each month.
+        dividend_yield:        Annual dividend yield (e.g. 0.015 = 1.5%).
+        dividend_mode:         "reinvest" = dividends reinvested in same stock,
+                               "redistribute" = dividends added to portfolio cash
+                               and allocated proportionally at next rebalance.
+                               Both modes effectively compound; the difference
+                               is modelled as a small drag for redistribute.
     """
     quarterly_return = (1 + annual_return) ** 0.25 - 1
     quarterly_drag = QUARTERLY_REBALANCE_DRAG
+    quarterly_div_yield = dividend_yield / 4
+    quarterly_contribution = monthly_contribution * 3  # 3 months per quarter
+
+    # Redistribute mode adds a small friction cost (0.05% per quarter)
+    # to model the cost of selling dividend shares and reallocating
+    redistribute_drag = 0.0005 if dividend_mode == "redistribute" else 0.0
 
     value = initial
+    total_contributions = 0.0
+    total_dividends = 0.0
     yearly = []
 
     for yr in range(1, years + 1):
         start_val = value
+        year_contributions = 0.0
+        year_dividends = 0.0
+
         for _q in range(4):
-            value *= (1 + quarterly_return - quarterly_drag)
-        annual_ret = (value - start_val) / start_val * 100
-        cum_ret = (value - initial) / initial * 100
+            # Quarterly price return (excluding dividends since we handle separately)
+            price_return = quarterly_return - quarterly_div_yield
+            value *= (1 + price_return - quarterly_drag - redistribute_drag)
+
+            # Dividend income
+            div_income = value * quarterly_div_yield
+            year_dividends += div_income
+            total_dividends += div_income
+
+            # Reinvest dividends (both modes add back to portfolio, just with
+            # different friction already accounted for above)
+            value += div_income
+
+            # Regular contributions
+            value += quarterly_contribution
+            year_contributions += quarterly_contribution
+            total_contributions += quarterly_contribution
+
+        annual_ret = (value - start_val - year_contributions) / start_val * 100 if start_val > 0 else 0
+        total_invested = initial + total_contributions
+        cum_ret = (value - total_invested) / total_invested * 100 if total_invested > 0 else 0
+
         yearly.append(YearSnapshot(
             year=yr,
             starting_value=round(start_val, 2),
             ending_value=round(value, 2),
             annual_return_pct=round(annual_ret, 2),
             cumulative_return_pct=round(cum_ret, 2),
+            contributions_this_year=round(year_contributions, 2),
+            dividends_this_year=round(year_dividends, 2),
         ))
 
-    total_return = (value - initial) / initial
-    cagr = (value / initial) ** (1 / years) - 1 if years > 0 else 0
+    total_invested = initial + total_contributions
+    total_return = (value - total_invested) / total_invested if total_invested > 0 else 0
+    cagr = (value / initial) ** (1 / years) - 1 if years > 0 and initial > 0 else 0
 
     return ScenarioResult(
         name=name,
@@ -181,9 +246,12 @@ def project_scenario(
         annual_volatility=annual_volatility,
         final_value=round(value, 2),
         total_return_pct=round(total_return * 100, 2),
-        total_profit=round(value - initial, 2),
+        total_profit=round(value - total_invested, 2),
         cagr=round(cagr * 100, 2),
         yearly=yearly,
+        total_contributions=round(total_contributions, 2),
+        total_dividends=round(total_dividends, 2),
+        total_invested=round(total_invested, 2),
     )
 
 
@@ -191,6 +259,9 @@ def project_all_scenarios(
     initial: float,
     years: int = DEFAULT_YEARS,
     custom_scenarios: dict | None = None,
+    monthly_contribution: float = 0.0,
+    dividend_yield: float = 0.0,
+    dividend_mode: str = "reinvest",
 ) -> list[ScenarioResult]:
     """Run all predefined scenarios (bull, base, bear, crash)."""
     scenarios = custom_scenarios or SCENARIO_DEFAULTS
@@ -204,6 +275,9 @@ def project_all_scenarios(
             name=name,
             label=params["label"],
             description=params["description"],
+            monthly_contribution=monthly_contribution,
+            dividend_yield=dividend_yield,
+            dividend_mode=dividend_mode,
         )
         results.append(result)
     return results
@@ -219,50 +293,75 @@ def run_monte_carlo(
     annual_volatility: float = 0.18,
     num_simulations: int = DEFAULT_SIMULATIONS,
     seed: int | None = None,
+    monthly_contribution: float = 0.0,
+    dividend_yield: float = 0.0,
+    dividend_mode: str = "reinvest",
 ) -> MonteCarloResult:
     """
     Run a Monte Carlo simulation of portfolio growth.
 
     Uses geometric Brownian motion (log-normal returns) to model quarterly
-    portfolio returns, incorporating rebalance drag.
+    portfolio returns, incorporating rebalance drag, dividend reinvestment,
+    and regular contributions.
 
     Args:
-        initial:            Starting dollar amount.
-        years:              Investment horizon.
-        annual_return:      Expected annualized return (e.g. 0.11 = 11%).
-        annual_volatility:  Annualized volatility (e.g. 0.18 = 18%).
-        num_simulations:    Number of random paths to generate.
-        seed:               Optional RNG seed for reproducibility.
+        initial:              Starting dollar amount.
+        years:                Investment horizon.
+        annual_return:        Expected annualized return (e.g. 0.11 = 11%).
+        annual_volatility:    Annualized volatility (e.g. 0.18 = 18%).
+        num_simulations:      Number of random paths to generate.
+        seed:                 Optional RNG seed for reproducibility.
+        monthly_contribution: Dollar amount added monthly.
+        dividend_yield:       Annual dividend yield (e.g. 0.015 = 1.5%).
+        dividend_mode:        "reinvest" or "redistribute".
     """
     if seed is not None:
         random.seed(seed)
 
     num_quarters = years * 4
-    # Convert annual params to quarterly
-    q_mu = (annual_return - 0.5 * annual_volatility ** 2) / 4
-    q_sigma = annual_volatility / (4 ** 0.5)
-    q_drag = QUARTERLY_REBALANCE_DRAG
+    quarterly_contribution = monthly_contribution * 3
+    quarterly_div_yield = dividend_yield / 4
+    redistribute_drag = 0.0005 if dividend_mode == "redistribute" else 0.0
 
-    # Storage: all final values, and year-end values for path percentiles
+    # Convert annual params to quarterly (price return, excluding dividend)
+    effective_annual = annual_return - dividend_yield  # price-only return
+    q_mu = (effective_annual - 0.5 * annual_volatility ** 2) / 4
+    q_sigma = annual_volatility / (4 ** 0.5)
+    q_drag = QUARTERLY_REBALANCE_DRAG + redistribute_drag
+
+    total_contributions_per_sim = quarterly_contribution * num_quarters
+    total_invested = initial + total_contributions_per_sim
+
+    # Storage
     final_values = []
-    # year_end_values[year_index] = list of values at that year-end across all sims
-    year_end_values = [[] for _ in range(years + 1)]  # index 0 = start
+    year_end_values = [[] for _ in range(years + 1)]
+    total_dividends_per_sim = []
 
     for _ in range(num_simulations):
         value = initial
+        sim_dividends = 0.0
         year_end_values[0].append(value)
 
         for yr in range(1, years + 1):
             for _q in range(4):
-                # Log-normal quarterly return
+                # Log-normal quarterly price return
                 z = random.gauss(0, 1)
                 q_return = math.exp(q_mu + q_sigma * z) - 1
                 value *= (1 + q_return - q_drag)
-                value = max(value, 0)  # floor at zero
+                value = max(value, 0)
+
+                # Dividend income
+                div_income = value * quarterly_div_yield
+                sim_dividends += div_income
+                value += div_income
+
+                # Regular contribution
+                value += quarterly_contribution
 
             year_end_values[yr].append(value)
 
         final_values.append(value)
+        total_dividends_per_sim.append(sim_dividends)
 
     # Sort for percentiles
     final_values.sort()
@@ -282,13 +381,20 @@ def run_monte_carlo(
         p25_path.append(round(percentile(vals, 25), 2))
         p75_path.append(round(percentile(vals, 75), 2))
 
-    # Probability metrics
+    # Contribution path (cumulative invested at each year-end)
+    contribution_path = []
+    for yr in range(years + 1):
+        cum_contrib = initial + quarterly_contribution * 4 * yr
+        contribution_path.append(round(cum_contrib, 2))
+
+    # Probability metrics (relative to total invested, not just initial)
     n = len(final_values)
-    prob_profit = sum(1 for v in final_values if v > initial) / n
-    prob_double = sum(1 for v in final_values if v > 2 * initial) / n
-    prob_loss_10 = sum(1 for v in final_values if v < initial * 0.90) / n
-    prob_loss_25 = sum(1 for v in final_values if v < initial * 0.75) / n
+    prob_profit = sum(1 for v in final_values if v > total_invested) / n
+    prob_double = sum(1 for v in final_values if v > 2 * total_invested) / n
+    prob_loss_10 = sum(1 for v in final_values if v < total_invested * 0.90) / n
+    prob_loss_25 = sum(1 for v in final_values if v < total_invested * 0.75) / n
     mean_val = sum(final_values) / n
+    median_dividends = sorted(total_dividends_per_sim)[n // 2]
 
     return MonteCarloResult(
         initial_investment=initial,
@@ -311,6 +417,10 @@ def run_monte_carlo(
         median_path=median_path,
         p25_path=p25_path,
         p75_path=p75_path,
+        total_contributions=round(total_contributions_per_sim, 2),
+        total_invested=round(total_invested, 2),
+        total_dividends_median=round(median_dividends, 2),
+        contribution_path=contribution_path,
     )
 
 
@@ -322,26 +432,43 @@ def run_full_simulation(
     years: int = DEFAULT_YEARS,
     num_simulations: int = DEFAULT_SIMULATIONS,
     seed: int | None = 42,
+    monthly_contribution: float = 0.0,
+    dividend_yield: float = 0.0,
+    dividend_mode: str = "reinvest",
 ) -> SimulationReport:
     """
     Run the complete simulation: deterministic scenarios + Monte Carlo.
 
     Args:
-        initial:          Dollar amount to invest.
-        years:            Investment horizon in years.
-        num_simulations:  Number of Monte Carlo paths.
-        seed:             RNG seed (42 for reproducibility by default).
+        initial:                Dollar amount to invest.
+        years:                  Investment horizon in years.
+        num_simulations:        Number of Monte Carlo paths.
+        seed:                   RNG seed (42 for reproducibility by default).
+        monthly_contribution:   Dollar amount added each month.
+        dividend_yield:         Annual dividend yield (e.g. 0.015 = 1.5%).
+        dividend_mode:          "reinvest" = reinvest in same stock,
+                                "redistribute" = cash out and reallocate.
 
     Returns:
         SimulationReport with all scenarios and Monte Carlo results.
     """
+    total_contributions = monthly_contribution * 12 * years
+    total_invested = initial + total_contributions
+
     logger.info(
         f"Running simulation: ${initial:,.0f} over {years} years "
-        f"({num_simulations:,} Monte Carlo paths)"
+        f"({num_simulations:,} Monte Carlo paths, "
+        f"${monthly_contribution:,.0f}/mo contribution, "
+        f"{dividend_yield*100:.1f}% div yield [{dividend_mode}])"
     )
 
     # Deterministic scenarios
-    scenarios = project_all_scenarios(initial, years)
+    scenarios = project_all_scenarios(
+        initial, years,
+        monthly_contribution=monthly_contribution,
+        dividend_yield=dividend_yield,
+        dividend_mode=dividend_mode,
+    )
 
     # Monte Carlo (uses base-case assumptions)
     base = SCENARIO_DEFAULTS["base"]
@@ -352,6 +479,9 @@ def run_full_simulation(
         annual_volatility=base["annual_volatility"],
         num_simulations=num_simulations,
         seed=seed,
+        monthly_contribution=monthly_contribution,
+        dividend_yield=dividend_yield,
+        dividend_mode=dividend_mode,
     )
 
     return SimulationReport(
@@ -359,4 +489,9 @@ def run_full_simulation(
         years=years,
         scenarios=scenarios,
         monte_carlo=mc,
+        monthly_contribution=monthly_contribution,
+        dividend_yield=dividend_yield,
+        dividend_mode=dividend_mode,
+        total_contributions=round(total_contributions, 2),
+        total_invested=round(total_invested, 2),
     )

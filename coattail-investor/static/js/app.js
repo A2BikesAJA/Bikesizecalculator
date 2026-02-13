@@ -123,41 +123,54 @@ function createGrowthChart(canvasId, data) {
 
     const labels = Array.from({ length: data.years + 1 }, (_, i) => `Year ${i}`);
 
+    const datasets = [
+        {
+            label: '75th Percentile',
+            data: data.p75_path,
+            borderColor: CHART_COLORS.green,
+            backgroundColor: 'rgba(34,197,94,0.05)',
+            borderWidth: 1.5,
+            pointRadius: 3,
+            tension: 0.3,
+        },
+        {
+            label: 'Median (50th)',
+            data: data.median_path,
+            borderColor: CHART_COLORS.accent,
+            backgroundColor: 'rgba(0,217,126,0.1)',
+            borderWidth: 2.5,
+            pointRadius: 4,
+            tension: 0.3,
+            fill: false,
+        },
+        {
+            label: '25th Percentile',
+            data: data.p25_path,
+            borderColor: CHART_COLORS.orange,
+            backgroundColor: 'rgba(245,158,11,0.05)',
+            borderWidth: 1.5,
+            pointRadius: 3,
+            tension: 0.3,
+        },
+    ];
+
+    if (data.contribution_path && data.contribution_path.length > 0) {
+        datasets.push({
+            label: 'Total Invested',
+            data: data.contribution_path,
+            borderColor: CHART_COLORS.gray,
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [8, 4],
+            pointRadius: 2,
+            pointStyle: 'rect',
+            tension: 0,
+        });
+    }
+
     new Chart(ctx, {
         type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: '75th Percentile',
-                    data: data.p75_path,
-                    borderColor: CHART_COLORS.green,
-                    backgroundColor: 'rgba(34,197,94,0.05)',
-                    borderWidth: 1.5,
-                    pointRadius: 3,
-                    tension: 0.3,
-                },
-                {
-                    label: 'Median (50th)',
-                    data: data.median_path,
-                    borderColor: CHART_COLORS.accent,
-                    backgroundColor: 'rgba(0,217,126,0.1)',
-                    borderWidth: 2.5,
-                    pointRadius: 4,
-                    tension: 0.3,
-                    fill: false,
-                },
-                {
-                    label: '25th Percentile',
-                    data: data.p25_path,
-                    borderColor: CHART_COLORS.orange,
-                    backgroundColor: 'rgba(245,158,11,0.05)',
-                    borderWidth: 1.5,
-                    pointRadius: 3,
-                    tension: 0.3,
-                },
-            ],
-        },
+        data: { labels, datasets },
         options: {
             ...CHART_DEFAULTS,
             plugins: {

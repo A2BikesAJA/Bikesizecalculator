@@ -13,7 +13,8 @@
 <div class="card mb-4">
     <div class="card-body">
         <form method="POST">
-            <div class="row g-3 align-items-end">
+            <!-- Row 1: Core inputs -->
+            <div class="row g-3 align-items-end mb-3">
                 <div class="col-md-3">
                     <label class="form-label small text-muted">Investment Amount ($)</label>
                     <input type="number" class="form-control" name="dollars" value="{{ form.dollars }}" min="100" step="100" required>
@@ -30,6 +31,28 @@
                     <label class="form-label small text-muted">Seed</label>
                     <input type="number" class="form-control" name="seed" value="{{ form.seed }}">
                 </div>
+            </div>
+
+            <!-- Row 2: Contributions & Dividends -->
+            <div class="row g-3 align-items-end mb-3">
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Monthly Contribution ($)</label>
+                    <input type="number" class="form-control" name="monthly_contribution" value="{{ form.monthly_contribution }}" min="0" step="50" placeholder="0">
+                    <div class="form-text small">Regular amount added each month</div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted">Dividend Yield (%)</label>
+                    <input type="number" class="form-control" name="dividend_yield" value="{{ form.dividend_yield }}" min="0" max="20" step="0.1" placeholder="1.5">
+                    <div class="form-text small">Annual yield estimate</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Dividend Reinvestment</label>
+                    <select class="form-select" name="dividend_mode">
+                        <option value="reinvest" {% if form.dividend_mode == 'reinvest' %}selected{% endif %}>Reinvest in Same Stock (DRIP)</option>
+                        <option value="redistribute" {% if form.dividend_mode == 'redistribute' %}selected{% endif %}>Cash Out & Redistribute Across Portfolio</option>
+                    </select>
+                    <div class="form-text small">How dividends are handled</div>
+                </div>
                 <div class="col-md-3">
                     <button type="submit" class="btn btn-accent btn-lg w-100">
                         <i class="bi bi-lightning me-1"></i>Run Simulation
@@ -45,12 +68,23 @@
 {% endif %}
 
 {% if report %}
+
+{% set has_contributions = report.total_contributions > 0 %}
+{% set has_dividends = report.dividend_yield > 0 %}
+
 <!-- Summary -->
 <div class="stats-row mb-4">
     <div class="card card-metric">
         <div class="metric-value">{{ report.initial_investment|currency }}</div>
         <div class="metric-label">Initial Investment</div>
     </div>
+    {% if has_contributions %}
+    <div class="card card-metric">
+        <div class="metric-value">{{ report.total_invested|currency }}</div>
+        <div class="metric-label">Total Invested</div>
+        <div class="small text-muted mt-1">${{ "%.0f"|format(report.monthly_contribution) }}/mo &times; {{ report.years }} yrs</div>
+    </div>
+    {% endif %}
     <div class="card card-metric">
         <div class="metric-value text-accent">{{ report.monte_carlo.p50|currency }}</div>
         <div class="metric-label">Median Outcome</div>
@@ -68,6 +102,36 @@
         <div class="metric-label">Chance of 2x</div>
     </div>
 </div>
+
+<!-- Contribution & Dividend info banner -->
+{% if has_contributions or has_dividends %}
+<div class="card mb-4" style="border-color: rgba(0,217,126,0.3);">
+    <div class="card-body py-3">
+        <div class="row text-center">
+            {% if has_contributions %}
+            <div class="col-md-3">
+                <div class="small text-muted">Monthly Contribution</div>
+                <div class="fw-bold">${{ "%.0f"|format(report.monthly_contribution) }}/mo</div>
+            </div>
+            <div class="col-md-3">
+                <div class="small text-muted">Total Contributions</div>
+                <div class="fw-bold">{{ report.total_contributions|currency }}</div>
+            </div>
+            {% endif %}
+            {% if has_dividends %}
+            <div class="col-md-3">
+                <div class="small text-muted">Dividend Yield</div>
+                <div class="fw-bold">{{ "%.1f"|format(report.dividend_yield * 100) }}%</div>
+            </div>
+            <div class="col-md-3">
+                <div class="small text-muted">Dividend Mode</div>
+                <div class="fw-bold">{% if report.dividend_mode == 'reinvest' %}Reinvest (DRIP){% else %}Redistribute{% endif %}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Scenario Projections -->
 <div class="card mb-4">
@@ -87,7 +151,7 @@
                                 <th>Scenario</th>
                                 <th class="text-end">Annual</th>
                                 <th class="text-end">Final Value</th>
-                                <th class="text-end">Total Return</th>
+                                <th class="text-end">Profit</th>
                                 <th class="text-end">CAGR</th>
                             </tr>
                         </thead>
@@ -97,8 +161,8 @@
                                 <td class="fw-semibold">{{ s.label }}</td>
                                 <td class="text-end">{{ "%.0f"|format(s.annual_return * 100) }}%</td>
                                 <td class="text-end fw-semibold">{{ s.final_value|currency }}</td>
-                                <td class="text-end {% if s.total_return_pct > 0 %}text-success{% else %}text-danger{% endif %}">
-                                    {% if s.total_return_pct > 0 %}+{% endif %}{{ "%.1f"|format(s.total_return_pct) }}%
+                                <td class="text-end {% if s.total_profit > 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {% if s.total_profit > 0 %}+{% endif %}{{ s.total_profit|currency }}
                                 </td>
                                 <td class="text-end">{{ "%.1f"|format(s.cagr) }}%</td>
                             </tr>
@@ -106,6 +170,12 @@
                         </tbody>
                     </table>
                 </div>
+                {% if has_dividends %}
+                <div class="mt-3 small text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Base case dividends reinvested: ~{{ report.scenarios[1].total_dividends|currency }} over {{ report.years }} years
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -117,7 +187,7 @@
         <div class="card h-100">
             <div class="card-body">
                 <h6 class="section-title"><i class="bi bi-bar-chart text-info me-2"></i>Monte Carlo Growth Path</h6>
-                <p class="text-muted small">{{ report.monte_carlo.num_simulations|int }} simulated paths &mdash; Shaded region = 25th-75th percentile</p>
+                <p class="text-muted small">{{ report.monte_carlo.num_simulations|int }} simulated paths &mdash; Shaded region = 25th-75th percentile{% if has_contributions %} &mdash; Dashed line = total invested{% endif %}</p>
                 <div class="chart-container">
                     <canvas id="monteCarloChart"></canvas>
                 </div>
@@ -131,10 +201,10 @@
                 <div class="table-responsive">
                     <table class="table mb-0">
                         <thead>
-                            <tr><th>Percentile</th><th class="text-end">Value (Yr {{ report.years }})</th><th class="text-end">Return</th></tr>
+                            <tr><th>Percentile</th><th class="text-end">Value (Yr {{ report.years }})</th><th class="text-end">vs Invested</th></tr>
                         </thead>
                         <tbody>
-                            {% set initial = report.initial_investment %}
+                            {% set total_inv = report.monte_carlo.total_invested if report.monte_carlo.total_invested else report.initial_investment %}
                             {% for label, val in [
                                 ('5th (worst)', report.monte_carlo.p5),
                                 ('10th', report.monte_carlo.p10),
@@ -148,14 +218,20 @@
                             <tr>
                                 <td>{{ label }}</td>
                                 <td class="text-end fw-semibold">{{ val|currency }}</td>
-                                <td class="text-end {% if val > initial %}text-success{% elif val < initial %}text-danger{% endif %}">
-                                    {% if val > initial %}+{% endif %}{{ "%.1f"|format((val - initial) / initial * 100) }}%
+                                <td class="text-end {% if val > total_inv %}text-success{% elif val < total_inv %}text-danger{% endif %}">
+                                    {% if val > total_inv %}+{% endif %}{{ "%.1f"|format((val - total_inv) / total_inv * 100) }}%
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+
+                {% if has_contributions %}
+                <div class="mt-2 small text-muted">
+                    <i class="bi bi-info-circle me-1"></i>Returns calculated vs total invested ({{ total_inv|currency }}), not just initial amount
+                </div>
+                {% endif %}
 
                 <!-- Probability gauges -->
                 <div class="mt-4">
@@ -177,6 +253,20 @@
                     </div>
                     {% endfor %}
                 </div>
+
+                {% if has_dividends %}
+                <div class="mt-3 p-2 rounded" style="background: rgba(0,217,126,0.08); border: 1px solid rgba(0,217,126,0.2);">
+                    <div class="small fw-bold text-accent mb-1"><i class="bi bi-cash-coin me-1"></i>Dividend Income (Median Path)</div>
+                    <div class="d-flex justify-content-between small">
+                        <span class="text-muted">Total dividends earned</span>
+                        <span class="fw-bold">{{ report.monte_carlo.total_dividends_median|currency }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between small">
+                        <span class="text-muted">Mode</span>
+                        <span>{% if report.dividend_mode == 'reinvest' %}Reinvested (DRIP){% else %}Redistributed{% endif %}</span>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -194,6 +284,12 @@
                         {% for s in report.scenarios %}
                         <th class="text-end">{{ s.label }}</th>
                         {% endfor %}
+                        {% if has_contributions %}
+                        <th class="text-end">Contributed</th>
+                        {% endif %}
+                        {% if has_dividends %}
+                        <th class="text-end">Dividends (Base)</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -202,6 +298,12 @@
                         {% for s in report.scenarios %}
                         <td class="text-end">{{ report.initial_investment|currency }}</td>
                         {% endfor %}
+                        {% if has_contributions %}
+                        <td class="text-end text-muted">$0.00</td>
+                        {% endif %}
+                        {% if has_dividends %}
+                        <td class="text-end text-muted">$0.00</td>
+                        {% endif %}
                     </tr>
                     {% for yr_idx in range(report.years) %}
                     <tr>
@@ -214,8 +316,32 @@
                             </div>
                         </td>
                         {% endfor %}
+                        {% if has_contributions %}
+                        <td class="text-end text-muted small">
+                            +{{ report.scenarios[1].yearly[yr_idx].contributions_this_year|currency }}
+                        </td>
+                        {% endif %}
+                        {% if has_dividends %}
+                        <td class="text-end text-accent small">
+                            {{ report.scenarios[1].yearly[yr_idx].dividends_this_year|currency }}
+                        </td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
+                    {% if has_contributions or has_dividends %}
+                    <tr class="border-top-2">
+                        <td class="fw-bold">Total</td>
+                        {% for s in report.scenarios %}
+                        <td class="text-end fw-bold">{{ s.final_value|currency }}</td>
+                        {% endfor %}
+                        {% if has_contributions %}
+                        <td class="text-end fw-bold">{{ report.total_contributions|currency }}</td>
+                        {% endif %}
+                        {% if has_dividends %}
+                        <td class="text-end fw-bold text-accent">{{ report.scenarios[1].total_dividends|currency }}</td>
+                        {% endif %}
+                    </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>
@@ -229,12 +355,20 @@
 <script>
     const reportData = {{ report | tojson }};
     createScenarioChart('scenarioChart', reportData.scenarios, reportData.initial_investment);
-    createGrowthChart('monteCarloChart', {
+
+    // Build growth chart data, including contribution baseline if applicable
+    const growthData = {
         years: reportData.years,
         median_path: reportData.monte_carlo.median_path,
         p25_path: reportData.monte_carlo.p25_path,
         p75_path: reportData.monte_carlo.p75_path,
-    });
+    };
+
+    {% if has_contributions %}
+    growthData.contribution_path = reportData.monte_carlo.contribution_path;
+    {% endif %}
+
+    createGrowthChart('monteCarloChart', growthData);
 </script>
 {% endif %}
 {% endblock %}
