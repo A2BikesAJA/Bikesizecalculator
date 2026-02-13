@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Investors - Coattail Investor{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h4 class="fw-bold mb-1">Tracked Investors</h4>
+        <p class="text-muted small mb-0">{{ investors|length }} institutional investors tracked via 13F filings</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Investor</th>
+                    <th>Entity</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Latest Quarter</th>
+                    <th class="text-end">Holdings</th>
+                    <th class="text-end">AUM ($M)</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for inv in investors %}
+                <tr onclick="window.location='/investor/{{ inv.name }}'" style="cursor:pointer">
+                    <td class="fw-semibold">{{ inv.name }}</td>
+                    <td class="text-muted">{{ inv.entity }}</td>
+                    <td><span class="badge badge-category cat-{{ inv.category }}">{{ inv.category }}</span></td>
+                    <td>
+                        {% if inv.has_data %}
+                            <span class="badge bg-success bg-opacity-25 text-success">{{ inv.quarters }} quarters</span>
+                        {% else %}
+                            <span class="badge bg-secondary bg-opacity-25 text-secondary">No data</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ inv.latest_quarter }}</td>
+                    <td class="text-end">{{ inv.num_holdings if inv.has_data else '&mdash;' }}</td>
+                    <td class="text-end">{{ inv.total_value_m if inv.has_data else '&mdash;' }}</td>
+                    <td class="text-muted small">{{ inv.notes }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

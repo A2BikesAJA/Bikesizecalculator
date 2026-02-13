@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Coattail Investor{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h4 class="fw-bold mb-1">Dashboard</h4>
+        <p class="text-muted small mb-0">Track top institutional investors via SEC 13F filings</p>
+    </div>
+</div>
+
+<!-- Metrics row -->
+<div class="stats-row mb-4">
+    <div class="card card-metric">
+        <div class="metric-value text-accent">{{ total_investors }}</div>
+        <div class="metric-label">Tracked Investors</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value {% if data_count > 0 %}text-success{% else %}text-muted{% endif %}">
+            {{ data_count }}/{{ total_investors }}
+        </div>
+        <div class="metric-label">With Data</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">
+            {% if total_value > 0 %}{{ total_value|big_number }}{% else %}&mdash;{% endif %}
+        </div>
+        <div class="metric-label">Total AUM Tracked</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">
+            {{ categories|length }}
+        </div>
+        <div class="metric-label">Categories</div>
+    </div>
+</div>
+
+{% if not has_data %}
+<!-- Empty state -->
+<div class="card">
+    <div class="empty-state">
+        <i class="bi bi-cloud-download d-block"></i>
+        <h5>No Data Yet</h5>
+        <p class="mb-3">Click <strong>Fetch Data</strong> in the navbar to download the latest 13F filings from SEC EDGAR.</p>
+        <button class="btn btn-accent btn-lg" onclick="startFetch()">
+            <i class="bi bi-cloud-download me-2"></i>Fetch 13F Filings
+        </button>
+    </div>
+</div>
+{% else %}
+
+<!-- Quick actions -->
+<div class="row mb-4 g-3">
+    <div class="col-md-3">
+        <a href="/consensus" class="card text-decoration-none h-100 investor-card">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-bullseye fs-2 text-accent d-block mb-2"></i>
+                <h6 class="mb-1">Consensus Picks</h6>
+                <small class="text-muted">See what the smart money agrees on</small>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3">
+        <a href="/allocate" class="card text-decoration-none h-100 investor-card">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-pie-chart fs-2 text-info d-block mb-2"></i>
+                <h6 class="mb-1">Build Portfolio</h6>
+                <small class="text-muted">Allocate dollars across top picks</small>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3">
+        <a href="/simulate" class="card text-decoration-none h-100 investor-card">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-lightning fs-2 text-warning d-block mb-2"></i>
+                <h6 class="mb-1">Simulate Returns</h6>
+                <small class="text-muted">Monte Carlo scenario analysis</small>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3">
+        <a href="/stock" class="card text-decoration-none h-100 investor-card">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-search fs-2 text-purple d-block mb-2"></i>
+                <h6 class="mb-1">Stock Lookup</h6>
+                <small class="text-muted">See who holds a specific stock</small>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Investors by Category -->
+{% for cat, invs in categories.items() %}
+<div class="mb-4">
+    <h6 class="section-title">
+        <span class="badge badge-category cat-{{ cat }} me-2">{{ cat }}</span>
+        {{ invs|length }} Investor{{ 's' if invs|length != 1 }}
+    </h6>
+    <div class="investor-grid">
+        {% for inv in invs %}
+        <a href="/investor/{{ inv.name }}" class="card investor-card text-decoration-none">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="mb-0 text-white">{{ inv.name }}</h6>
+                    {% if inv.has_data %}
+                        <span class="badge bg-success bg-opacity-25 text-success">{{ inv.quarters }}Q</span>
+                    {% else %}
+                        <span class="badge bg-secondary bg-opacity-25 text-secondary">No data</span>
+                    {% endif %}
+                </div>
+                <div class="text-muted small mb-2">{{ inv.entity }}</div>
+                {% if inv.has_data %}
+                <div class="d-flex justify-content-between small">
+                    <span class="text-muted">Holdings: <strong class="text-white">{{ inv.num_holdings }}</strong></span>
+                    <span class="text-muted">AUM: <strong class="text-white">${{ inv.total_value_m }}M</strong></span>
+                </div>
+                <div class="text-muted small mt-1">Latest: {{ inv.latest_quarter }}</div>
+                {% else %}
+                <div class="text-muted small fst-italic">{{ inv.notes }}</div>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}{{ investor.name }} - Coattail Investor{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb small">
+                <li class="breadcrumb-item"><a href="/investors">Investors</a></li>
+                <li class="breadcrumb-item active">{{ investor.name }}</li>
+            </ol>
+        </nav>
+        <h4 class="fw-bold mb-1">{{ investor.name }}</h4>
+        <p class="text-muted small mb-0">
+            {{ investor.entity }}
+            <span class="badge badge-category cat-{{ investor.category }} ms-2">{{ investor.category }}</span>
+        </p>
+    </div>
+</div>
+
+{% if error %}
+<div class="card">
+    <div class="empty-state">
+        <i class="bi bi-inbox d-block"></i>
+        <h5>{{ error }}</h5>
+        <p>Click <strong>Fetch Data</strong> in the navbar to download filings.</p>
+    </div>
+</div>
+{% elif analysis and analysis.get('error') %}
+<div class="alert alert-warning">{{ analysis.error }}</div>
+{% elif analysis %}
+
+<!-- Summary metrics -->
+<div class="stats-row mb-4">
+    <div class="card card-metric">
+        <div class="metric-value">{{ analysis.quarter }}</div>
+        <div class="metric-label">Latest Quarter</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ analysis.concentration.total_positions }}</div>
+        <div class="metric-label">Positions</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">${{ "%.1f"|format(analysis.concentration.total_value_millions) }}M</div>
+        <div class="metric-label">Portfolio Value</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ "%.1f"|format(analysis.concentration.top_10_pct) }}%</div>
+        <div class="metric-label">Top 10 Concentration</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ "%.1f"|format(analysis.turnover_rate) }}%</div>
+        <div class="metric-label">Turnover Rate</div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Top 10 Holdings -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="section-title">Top 10 Holdings</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Stock</th>
+                                <th>Ticker</th>
+                                <th class="text-end">Value ($K)</th>
+                                <th class="text-end">Shares</th>
+                                <th class="text-end">Weight %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for h in analysis.top_10 %}
+                            <tr>
+                                <td class="text-muted">{{ loop.index }}</td>
+                                <td>{{ h.name }}</td>
+                                <td class="fw-semibold">{{ h.ticker }}</td>
+                                <td class="text-end">{{ "{:,.0f}"|format(h.value_thousands) }}</td>
+                                <td class="text-end">{{ "{:,.0f}"|format(h.shares) }}</td>
+                                <td class="text-end fw-semibold">{{ "%.1f"|format(h.weight_pct) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sector Allocation -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="section-title">Sector Allocation</h6>
+                {% if analysis.sector_allocation %}
+                <div class="chart-container" style="height: 280px;">
+                    <canvas id="sectorChart"></canvas>
+                </div>
+                {% else %}
+                <p class="text-muted">No sector data available.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Changes -->
+<div class="row g-4 mt-1">
+    {% if analysis.new_positions %}
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-plus-circle text-success me-2"></i>New Positions</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr><th>Stock</th><th>Ticker</th><th class="text-end">Value ($K)</th><th class="text-end">Weight %</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for h in analysis.new_positions %}
+                            <tr>
+                                <td>{{ h.name }}</td>
+                                <td class="fw-semibold">{{ h.ticker }}</td>
+                                <td class="text-end">{{ "{:,.0f}"|format(h.value_thousands) }}</td>
+                                <td class="text-end">{{ "%.1f"|format(h.weight_pct) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if analysis.increased_positions %}
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-arrow-up-circle text-success me-2"></i>Increased Positions</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr><th>Stock</th><th>Ticker</th><th class="text-end">Change %</th><th class="text-end">Weight %</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for h in analysis.increased_positions[:10] %}
+                            <tr>
+                                <td>{{ h.name }}</td>
+                                <td class="fw-semibold">{{ h.ticker }}</td>
+                                <td class="text-end text-success">{% if h.change_pct %}+{{ "%.0f"|format(h.change_pct * 100) }}%{% endif %}</td>
+                                <td class="text-end">{{ "%.1f"|format(h.weight_pct) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if analysis.decreased_positions %}
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-arrow-down-circle text-danger me-2"></i>Decreased Positions</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr><th>Stock</th><th>Ticker</th><th class="text-end">Change %</th><th class="text-end">Weight %</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for h in analysis.decreased_positions[:10] %}
+                            <tr>
+                                <td>{{ h.name }}</td>
+                                <td class="fw-semibold">{{ h.ticker }}</td>
+                                <td class="text-end text-danger">{% if h.change_pct %}{{ "%.0f"|format(h.change_pct * 100) }}%{% endif %}</td>
+                                <td class="text-end">{{ "%.1f"|format(h.weight_pct) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if analysis.exited_positions %}
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-x-circle text-danger me-2"></i>Exited Positions</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr><th>Stock</th><th>Ticker</th><th class="text-end">Last Value ($K)</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for h in analysis.exited_positions %}
+                            <tr>
+                                <td>{{ h.name }}</td>
+                                <td class="fw-semibold">{{ h.ticker }}</td>
+                                <td class="text-end">{{ "{:,.0f}"|format(h.value_thousands) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if analysis and analysis.sector_allocation %}
+<script>
+    createSectorChart('sectorChart', {{ analysis.sector_allocation | tojson }});
+</script>
+{% endif %}
+{% endblock %}

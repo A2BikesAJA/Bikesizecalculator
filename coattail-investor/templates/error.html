@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Error - Coattail Investor{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="empty-state">
+        <i class="bi bi-exclamation-circle d-block text-danger"></i>
+        <h5>{{ message }}</h5>
+        <a href="/" class="btn btn-outline-secondary mt-3">Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

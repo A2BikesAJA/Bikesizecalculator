@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}Consensus Analysis - Coattail Investor{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h4 class="fw-bold mb-1">Consensus Analysis</h4>
+        <p class="text-muted small mb-0">Cross-investor consensus picks scored by holder count, weight, and momentum</p>
+    </div>
+</div>
+
+{% if error %}
+<div class="card">
+    <div class="empty-state">
+        <i class="bi bi-inbox d-block"></i>
+        <h5>{{ error }}</h5>
+        <p>Click <strong>Fetch Data</strong> in the navbar to download filings.</p>
+    </div>
+</div>
+{% elif consensus %}
+
+<!-- Summary metrics -->
+<div class="stats-row mb-4">
+    <div class="card card-metric">
+        <div class="metric-value">{{ consensus.quarter }}</div>
+        <div class="metric-label">Quarter</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ consensus.investors_with_data }}/{{ consensus.total_investors }}</div>
+        <div class="metric-label">Investors With Data</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ consensus.total_stocks_tracked }}</div>
+        <div class="metric-label">Stocks Tracked</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ consensus.all_consensus|length }}</div>
+        <div class="metric-label">Consensus Picks (3+)</div>
+    </div>
+</div>
+
+<!-- Top Consensus Picks -->
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="section-title"><i class="bi bi-trophy text-accent me-2"></i>Top {{ consensus.top_consensus|length }} Consensus Picks</h6>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ticker</th>
+                        <th>Company</th>
+                        <th class="text-center">Holders</th>
+                        <th class="text-end">Avg Weight</th>
+                        <th class="text-center">Direction</th>
+                        <th class="text-center">Signal</th>
+                        <th class="text-end">Score</th>
+                        <th>Held By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pick in consensus.top_consensus %}
+                    <tr>
+                        <td class="text-muted">{{ loop.index }}</td>
+                        <td class="fw-bold">{{ pick.ticker }}</td>
+                        <td>{{ pick.name }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-primary bg-opacity-25 text-primary">{{ pick.num_holders }}/{{ consensus.total_investors }}</span>
+                        </td>
+                        <td class="text-end">{{ "%.1f"|format(pick.avg_weight) }}%</td>
+                        <td class="text-center">
+                            <span class="direction dir-{{ pick.direction|lower }}">
+                                {% if pick.direction == 'Adding' %}<i class="bi bi-arrow-up-short"></i>{% elif pick.direction == 'Reducing' %}<i class="bi bi-arrow-down-short"></i>{% else %}<i class="bi bi-dash"></i>{% endif %}
+                                {{ pick.direction }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {% if pick.valuation %}
+                                {% set sig = pick.valuation.signal %}
+                                <span class="signal signal-{{ sig|lower }}">{{ sig }}</span>
+                            {% else %}
+                                <span class="signal signal-unknown">--</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end fw-semibold text-accent">{{ "%.1f"|format(pick.consensus_score) }}</td>
+                        <td class="text-muted small">{{ pick.holders[:4]|join(', ') }}{% if pick.holders|length > 4 %} +{{ pick.holders|length - 4 }}{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- New Consensus Picks -->
+    {% if consensus.new_consensus_picks %}
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-stars text-warning me-2"></i>New Consensus Picks</h6>
+                <p class="text-muted small">Stocks initiated by 3+ managers this quarter</p>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr><th>Ticker</th><th>Company</th><th class="text-center">Initiators</th><th>Who</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for pick in consensus.new_consensus_picks %}
+                            <tr>
+                                <td class="fw-bold">{{ pick.ticker }}</td>
+                                <td>{{ pick.name }}</td>
+                                <td class="text-center"><span class="badge bg-warning bg-opacity-25 text-warning">{{ pick.num_initiators }}</span></td>
+                                <td class="text-muted small">{{ pick.initiated_by|join(', ') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- High Conviction Overlap -->
+    {% if consensus.high_conviction_overlap %}
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-fire text-danger me-2"></i>High Conviction Overlap</h6>
+                <p class="text-muted small">Stocks in 3+ investors' top 10 holdings</p>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr><th>Ticker</th><th>Company</th><th class="text-center">In Top 10 Of</th><th class="text-end">Avg Weight</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for pick in consensus.high_conviction_overlap %}
+                            <tr>
+                                <td class="fw-bold">{{ pick.ticker }}</td>
+                                <td>{{ pick.name }}</td>
+                                <td class="text-center"><span class="badge bg-danger bg-opacity-25 text-danger">{{ pick.num_top10 }}</span></td>
+                                <td class="text-end">{{ "%.1f"|format(pick.avg_weight_in_top10) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Smart Money Momentum -->
+    {% if consensus.smart_money_momentum %}
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-rocket-takeoff text-success me-2"></i>Smart Money Momentum</h6>
+                <p class="text-muted small">3+ investors increased positions simultaneously</p>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr><th>Ticker</th><th>Company</th><th class="text-center"># Increasing</th><th>Who</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for pick in consensus.smart_money_momentum %}
+                            <tr>
+                                <td class="fw-bold">{{ pick.ticker }}</td>
+                                <td>{{ pick.name }}</td>
+                                <td class="text-center"><span class="badge bg-success bg-opacity-25 text-success">{{ pick.num_increasing }}</span></td>
+                                <td class="text-muted small">{{ pick.increased_by|join(', ') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Exit Warnings -->
+    {% if consensus.exit_warnings %}
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Exit Warnings</h6>
+                <p class="text-muted small">3+ investors reduced or exited</p>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr><th>Ticker</th><th>Company</th><th class="text-center"># Reducing</th><th class="text-end">Avg Reduction</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for pick in consensus.exit_warnings %}
+                            <tr>
+                                <td class="fw-bold">{{ pick.ticker }}</td>
+                                <td>{{ pick.name }}</td>
+                                <td class="text-center"><span class="badge bg-danger bg-opacity-25 text-danger">{{ pick.num_reducing }}</span></td>
+                                <td class="text-end text-danger">{{ "%.0f"|format(pick.avg_reduction_pct) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Full Watchlist -->
+{% if consensus.watchlist %}
+<div class="card mt-4">
+    <div class="card-body">
+        <h6 class="section-title"><i class="bi bi-list-check text-accent me-2"></i>Actionable Watchlist (Top {{ consensus.watchlist|length }})</h6>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Ticker</th>
+                        <th>Company</th>
+                        <th class="text-center">Holders</th>
+                        <th class="text-end">Avg Weight</th>
+                        <th class="text-center">Direction</th>
+                        <th class="text-center">Signal</th>
+                        <th class="text-end">Score</th>
+                        <th>Rationale</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in consensus.watchlist %}
+                    <tr>
+                        <td class="text-muted">{{ item.rank }}</td>
+                        <td class="fw-bold">{{ item.ticker }}</td>
+                        <td>{{ item.name }}</td>
+                        <td class="text-center">{{ item.num_holders }}</td>
+                        <td class="text-end">{{ "%.1f"|format(item.avg_weight) }}%</td>
+                        <td class="text-center">
+                            <span class="direction dir-{{ item.direction|lower }}">{{ item.direction }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% if item.valuation %}
+                                <span class="signal signal-{{ item.valuation.signal|lower }}">{{ item.valuation.signal }}</span>
+                            {% else %}
+                                <span class="text-muted">--</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end fw-semibold">{{ "%.1f"|format(item.consensus_score) }}</td>
+                        <td class="text-muted small">{{ item.rationale }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

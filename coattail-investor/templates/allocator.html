@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Portfolio Allocator - Coattail Investor{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h4 class="fw-bold mb-1">Portfolio Allocator</h4>
+        <p class="text-muted small mb-0">Build a weighted portfolio from consensus picks</p>
+    </div>
+</div>
+
+<!-- Input Form -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Investment Amount ($)</label>
+                    <input type="number" class="form-control" name="dollars" value="{{ form.dollars }}" min="100" step="100" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted">Strategy</label>
+                    <select class="form-select" name="strategy">
+                        <option value="conviction" {% if form.strategy == 'conviction' %}selected{% endif %}>Conviction</option>
+                        <option value="score" {% if form.strategy == 'score' %}selected{% endif %}>Score</option>
+                        <option value="equal" {% if form.strategy == 'equal' %}selected{% endif %}>Equal Weight</option>
+                        <option value="holders" {% if form.strategy == 'holders' %}selected{% endif %}>Holders</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted">Max Positions</label>
+                    <input type="number" class="form-control" name="max_positions" value="{{ form.max_positions }}" placeholder="All" min="1">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted">Max Weight %</label>
+                    <input type="number" class="form-control" name="max_weight" value="{{ form.max_weight }}" placeholder="25" min="1" max="100" step="0.5">
+                </div>
+                <div class="col-md-3 d-flex align-items-end gap-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="fractional" id="fractional" {% if form.fractional %}checked{% endif %}>
+                        <label class="form-check-label small" for="fractional">Fractional Shares</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="exclude_red" id="exclude_red" {% if form.exclude_red %}checked{% endif %}>
+                        <label class="form-check-label small" for="exclude_red">Exclude RED</label>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-accent">
+                    <i class="bi bi-pie-chart me-1"></i>Build Portfolio
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>
+{% endif %}
+
+{% if allocation %}
+<!-- Summary Metrics -->
+<div class="stats-row mb-4">
+    <div class="card card-metric">
+        <div class="metric-value text-accent">{{ allocation.num_positions }}</div>
+        <div class="metric-label">Positions</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ allocation.total_investment|currency }}</div>
+        <div class="metric-label">Total Investment</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ allocation.cash_invested|currency }}</div>
+        <div class="metric-label">Cash Invested</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ allocation.cash_remaining|currency }}</div>
+        <div class="metric-label">Cash Remaining</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ allocation.effective_positions }}</div>
+        <div class="metric-label">Effective Positions</div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Pie Chart -->
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="section-title">Allocation Breakdown</h6>
+                <div class="chart-container" style="height: 320px;">
+                    <canvas id="allocationPie"></canvas>
+                </div>
+                <div class="text-center mt-2 small text-muted">
+                    Strategy: <strong>{{ allocation.strategy }}</strong> |
+                    Largest: {{ "%.1f"|format(allocation.largest_position_pct) }}% |
+                    Smallest: {{ "%.1f"|format(allocation.smallest_position_pct) }}%
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Positions Table -->
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="section-title">Position Details</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Company</th>
+                                <th class="text-end">Weight</th>
+                                <th class="text-end">Dollars</th>
+                                <th class="text-end">Price</th>
+                                <th class="text-end">Shares</th>
+                                <th class="text-center">Signal</th>
+                                <th class="text-center">Dir</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in allocation.positions %}
+                            <tr>
+                                <td class="fw-bold">{{ p.ticker }}</td>
+                                <td class="small">{{ p.name[:25] }}{% if p.name|length > 25 %}...{% endif %}</td>
+                                <td class="text-end fw-semibold">{{ "%.1f"|format(p.final_weight_pct) }}%</td>
+                                <td class="text-end">{{ p.dollar_allocation|currency }}</td>
+                                <td class="text-end">{% if p.share_price %}{{ p.share_price|currency }}{% else %}--{% endif %}</td>
+                                <td class="text-end">
+                                    {% if p.shares_fractional > 0 %}
+                                        {{ "%.2f"|format(p.shares_fractional) }}
+                                    {% elif p.shares_whole > 0 %}
+                                        {{ p.shares_whole }}
+                                    {% else %}
+                                        --
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <span class="signal signal-{{ p.valuation_signal|lower }}">{{ p.valuation_signal }}</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="direction dir-{{ p.direction|lower }}">
+                                        {% if p.direction == 'Adding' %}<i class="bi bi-arrow-up-short"></i>{% elif p.direction == 'Reducing' %}<i class="bi bi-arrow-down-short"></i>{% else %}<i class="bi bi-dash"></i>{% endif %}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if allocation and allocation.positions %}
+<script>
+    createAllocationPie('allocationPie', {{ allocation.positions | tojson }});
+</script>
+{% endif %}
+{% endblock %}

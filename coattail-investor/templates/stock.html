@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Stock Lookup - Coattail Investor{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h4 class="fw-bold mb-1">Stock Lookup</h4>
+        <p class="text-muted small mb-0">See which tracked investors hold a specific stock</p>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="POST" class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label small text-muted">Ticker Symbol or Company Name</label>
+                <input type="text" class="form-control form-control-lg" name="ticker"
+                       value="{{ ticker }}" placeholder="e.g. AAPL, Microsoft, NVDA" autofocus>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-accent btn-lg w-100">
+                    <i class="bi bi-search me-1"></i>Search
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if result %}
+<div class="stats-row mb-4">
+    <div class="card card-metric">
+        <div class="metric-value">{{ result.stock_ticker }}</div>
+        <div class="metric-label">Ticker</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ result.num_holders }}</div>
+        <div class="metric-label">Holders (of {{ result.total_tracked }})</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">
+            {% if result.holders %}
+                {{ "%.1f"|format(result.holders|map(attribute='weight_pct')|max) }}%
+            {% else %}
+                --
+            {% endif %}
+        </div>
+        <div class="metric-label">Max Weight</div>
+    </div>
+</div>
+
+{% if result.holders %}
+<div class="card">
+    <div class="card-body">
+        <h6 class="section-title">
+            {{ result.stock_name }} ({{ result.stock_ticker }}) &mdash;
+            Held by {{ result.num_holders }} of {{ result.total_tracked }} tracked investors
+        </h6>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Investor</th>
+                        <th>Quarter</th>
+                        <th class="text-end">Value ($K)</th>
+                        <th class="text-end">Shares</th>
+                        <th class="text-end">Portfolio Weight</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in result.holders %}
+                    <tr>
+                        <td>
+                            <a href="/investor/{{ h.investor }}" class="text-decoration-none fw-semibold">{{ h.investor }}</a>
+                        </td>
+                        <td>{{ h.quarter }}</td>
+                        <td class="text-end">{{ "{:,.0f}"|format(h.value_thousands) }}</td>
+                        <td class="text-end">{{ "{:,.0f}"|format(h.shares) }}</td>
+                        <td class="text-end">
+                            <span class="fw-semibold">{{ "%.2f"|format(h.weight_pct) }}%</span>
+                            <div class="prob-bar mt-1" style="width:100px;display:inline-block;vertical-align:middle">
+                                <div class="prob-bar-fill bg-accent" style="width:{{ [h.weight_pct * 2, 100]|min }}%"></div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <i class="bi bi-search d-block"></i>
+        <h5>Not Found</h5>
+        <p>No tracked investor holds "{{ result.search_term }}" in their latest 13F filing.</p>
+    </div>
+</div>
+{% endif %}
+
+{% elif ticker %}
+<div class="card">
+    <div class="empty-state">
+        <i class="bi bi-inbox d-block"></i>
+        <h5>No Cached Data</h5>
+        <p>Fetch 13F filings first to search for stock holdings.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

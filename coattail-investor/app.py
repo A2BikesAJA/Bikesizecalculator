@@ -1,0 +1,466 @@
+from __future__ import annotations
+
+"""
+Coattail Investor -- Flask Web Application.
+
+Provides a browser-based interface for the Coattail Investor research tool,
+wrapping the same analysis, allocation, and simulation engines used by the CLI.
+"""
+
+import json
+import logging
+import sys
+import threading
+from dataclasses import asdict
+from pathlib import Path
+
+from flask import Flask, jsonify, render_template, request
+
+# Ensure local modules are importable
+sys.path.insert(0, str(Path(__file__).parent))
+
+from config import DATA_DIR, TRACKED_INVESTORS, get_investor_by_name
+
+app = Flask(__name__)
+logger = logging.getLogger(__name__)
+
+# ─── Background task state ───────────────────────────────────────────────────
+
+_task_state = {"running": False, "message": "", "done": False, "error": ""}
+_task_lock = threading.Lock()
+
+
+def _set_task(running=False, message="", done=False, error=""):
+    with _task_lock:
+        _task_state.update(running=running, message=message, done=done, error=error)
+
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+
+
+def _load_cached_data() -> dict[str, list[dict]]:
+    """Load all cached investor holdings data."""
+    all_data = {}
+    for investor in TRACKED_INVESTORS:
+        cache_file = DATA_DIR / f"holdings_{investor['cik']}.json"
+        if cache_file.exists():
+            with open(cache_file) as f:
+                all_data[investor["name"]] = json.load(f)
+        else:
+            all_data[investor["name"]] = []
+    return all_data
+
+
+def _has_cached_data() -> bool:
+    """Check if any cached data exists."""
+    for investor in TRACKED_INVESTORS:
+        cache_file = DATA_DIR / f"holdings_{investor['cik']}.json"
+        if cache_file.exists():
+            return True
+    return False
+
+
+def _investor_summary() -> list[dict]:
+    """Quick summary of each tracked investor's cached status."""
+    summaries = []
+    for inv in TRACKED_INVESTORS:
+        cache_file = DATA_DIR / f"holdings_{inv['cik']}.json"
+        info = {
+            "name": inv["name"],
+            "entity": inv["entity"],
+            "cik": inv["cik"],
+            "category": inv["category"],
+            "notes": inv["notes"],
+            "has_data": False,
+            "quarters": 0,
+            "latest_quarter": "N/A",
+            "filing_date": "N/A",
+            "num_holdings": 0,
+            "total_value_m": 0,
+        }
+        if cache_file.exists():
+            with open(cache_file) as f:
+                data = json.load(f)
+            if data:
+                info["has_data"] = True
+                info["quarters"] = len(data)
+                info["latest_quarter"] = data[0].get("quarter", "N/A")
+                info["filing_date"] = data[0].get("filing_date", "N/A")
+                info["num_holdings"] = data[0].get("num_holdings", 0)
+                info["total_value_m"] = round(
+                    data[0].get("total_value_thousands", 0) / 1000, 1
+                )
+        summaries.append(info)
+    return summaries
+
+
+# ─── Routes ──────────────────────────────────────────────────────────────────
+
+
+@app.route("/")
+def dashboard():
+    investors = _investor_summary()
+    has_data = any(i["has_data"] for i in investors)
+
+    categories = {}
+    for inv in investors:
+        cat = inv["category"]
+        categories.setdefault(cat, []).append(inv)
+
+    total_value = sum(i["total_value_m"] for i in investors)
+    data_count = sum(1 for i in investors if i["has_data"])
+
+    return render_template(
+        "dashboard.html",
+        investors=investors,
+        categories=categories,
+        has_data=has_data,
+        total_value=total_value,
+        data_count=data_count,
+        total_investors=len(investors),
+    )
+
+
+@app.route("/investors")
+def investors_list():
+    investors = _investor_summary()
+    return render_template("investors.html", investors=investors)
+
+
+@app.route("/investor/<name>")
+def investor_detail(name):
+    from analyzer import analyze_investor
+
+    inv = get_investor_by_name(name)
+    if not inv:
+        return render_template("error.html", message=f"Investor '{name}' not found."), 404
+
+    cache_file = DATA_DIR / f"holdings_{inv['cik']}.json"
+    if not cache_file.exists():
+        return render_template(
+            "investor_detail.html",
+            investor=inv,
+            analysis=None,
+            error="No cached data. Fetch filings first.",
+        )
+
+    with open(cache_file) as f:
+        data = json.load(f)
+
+    analysis = analyze_investor(data)
+    return render_template("investor_detail.html", investor=inv, analysis=analysis, error=None)
+
+
+@app.route("/consensus")
+def consensus_page():
+    from analyzer import build_consensus
+
+    all_data = _load_cached_data()
+    if not any(v for v in all_data.values()):
+        return render_template("consensus.html", consensus=None, error="No cached data. Fetch filings first.")
+
+    consensus = build_consensus(all_data)
+
+    # Try to enrich with valuation data (non-blocking)
+    try:
+        from valuation import enrich_consensus_with_valuation
+        consensus = enrich_consensus_with_valuation(consensus)
+    except Exception as e:
+        logger.warning(f"Valuation enrichment failed: {e}")
+
+    return render_template("consensus.html", consensus=consensus, error=None)
+
+
+@app.route("/stock", methods=["GET", "POST"])
+def stock_lookup():
+    from analyzer import find_stock_across_investors
+
+    result = None
+    ticker = ""
+
+    if request.method == "POST":
+        ticker = request.form.get("ticker", "").strip()
+        if ticker:
+            all_data = _load_cached_data()
+            if any(v for v in all_data.values()):
+                result = find_stock_across_investors(ticker, all_data)
+
+    return render_template("stock.html", result=result, ticker=ticker)
+
+
+@app.route("/allocate", methods=["GET", "POST"])
+def allocate_page():
+    from allocator import allocate_portfolio
+    from analyzer import build_consensus
+
+    allocation = None
+    error = None
+    form_data = {
+        "dollars": 10000,
+        "strategy": "conviction",
+        "max_positions": "",
+        "max_weight": "",
+        "fractional": False,
+        "exclude_red": False,
+    }
+
+    if request.method == "POST":
+        try:
+            dollars = float(request.form.get("dollars", 10000))
+            strategy = request.form.get("strategy", "conviction")
+            max_positions = request.form.get("max_positions", "")
+            max_weight = request.form.get("max_weight", "")
+            fractional = request.form.get("fractional") == "on"
+            exclude_red = request.form.get("exclude_red") == "on"
+
+            form_data = {
+                "dollars": dollars,
+                "strategy": strategy,
+                "max_positions": max_positions,
+                "max_weight": max_weight,
+                "fractional": fractional,
+                "exclude_red": exclude_red,
+            }
+
+            if dollars <= 0:
+                error = "Investment amount must be positive."
+            else:
+                all_data = _load_cached_data()
+                if not any(v for v in all_data.values()):
+                    error = "No cached data. Fetch filings first."
+                else:
+                    consensus = build_consensus(all_data)
+
+                    try:
+                        from valuation import enrich_consensus_with_valuation
+                        consensus = enrich_consensus_with_valuation(consensus)
+                    except Exception:
+                        pass
+
+                    watchlist = consensus.get("watchlist", [])
+                    if not watchlist:
+                        error = "No consensus watchlist available."
+                    else:
+                        alloc = allocate_portfolio(
+                            watchlist=watchlist,
+                            total_dollars=dollars,
+                            strategy=strategy,
+                            max_positions=int(max_positions) if max_positions else None,
+                            max_single_pct=float(max_weight) if max_weight else None,
+                            fractional_shares=fractional,
+                            exclude_red=exclude_red,
+                        )
+                        allocation = {
+                            "total_investment": alloc.total_investment,
+                            "strategy": alloc.strategy,
+                            "num_positions": alloc.num_positions,
+                            "cash_invested": alloc.cash_invested,
+                            "cash_remaining": alloc.cash_remaining,
+                            "largest_position_pct": alloc.largest_position_pct,
+                            "smallest_position_pct": alloc.smallest_position_pct,
+                            "effective_positions": alloc.effective_positions,
+                            "positions": [asdict(p) for p in alloc.positions],
+                        }
+        except ValueError:
+            error = "Invalid input. Please enter valid numbers."
+        except Exception as e:
+            error = f"Allocation failed: {e}"
+
+    return render_template(
+        "allocator.html", allocation=allocation, error=error, form=form_data
+    )
+
+
+@app.route("/simulate", methods=["GET", "POST"])
+def simulate_page():
+    from simulator import run_full_simulation
+
+    report_data = None
+    error = None
+    form_data = {"dollars": 20000, "years": 5, "simulations": 10000, "seed": 42}
+
+    if request.method == "POST":
+        try:
+            dollars = float(request.form.get("dollars", 20000))
+            years = int(request.form.get("years", 5))
+            simulations = int(request.form.get("simulations", 10000))
+            seed = int(request.form.get("seed", 42))
+
+            form_data = {
+                "dollars": dollars,
+                "years": years,
+                "simulations": simulations,
+                "seed": seed,
+            }
+
+            if dollars <= 0:
+                error = "Investment amount must be positive."
+            else:
+                report = run_full_simulation(
+                    initial=dollars,
+                    years=years,
+                    num_simulations=simulations,
+                    seed=seed,
+                )
+
+                scenarios = []
+                for s in report.scenarios:
+                    yearly = [
+                        {
+                            "year": y.year,
+                            "starting_value": y.starting_value,
+                            "ending_value": y.ending_value,
+                            "annual_return_pct": y.annual_return_pct,
+                            "cumulative_return_pct": y.cumulative_return_pct,
+                        }
+                        for y in s.yearly
+                    ]
+                    scenarios.append({
+                        "name": s.name,
+                        "label": s.label,
+                        "description": s.description,
+                        "annual_return": s.annual_return,
+                        "annual_volatility": s.annual_volatility,
+                        "final_value": s.final_value,
+                        "total_return_pct": s.total_return_pct,
+                        "total_profit": s.total_profit,
+                        "cagr": s.cagr,
+                        "yearly": yearly,
+                    })
+
+                mc = report.monte_carlo
+                report_data = {
+                    "initial_investment": report.initial_investment,
+                    "years": report.years,
+                    "scenarios": scenarios,
+                    "monte_carlo": {
+                        "num_simulations": mc.num_simulations,
+                        "annual_return": mc.annual_return,
+                        "annual_volatility": mc.annual_volatility,
+                        "p5": mc.p5,
+                        "p10": mc.p10,
+                        "p25": mc.p25,
+                        "p50": mc.p50,
+                        "p75": mc.p75,
+                        "p90": mc.p90,
+                        "p95": mc.p95,
+                        "mean": mc.mean,
+                        "prob_profit": mc.prob_profit,
+                        "prob_double": mc.prob_double,
+                        "prob_loss_10pct": mc.prob_loss_10pct,
+                        "prob_loss_25pct": mc.prob_loss_25pct,
+                        "median_path": mc.median_path,
+                        "p25_path": mc.p25_path,
+                        "p75_path": mc.p75_path,
+                    },
+                }
+        except ValueError:
+            error = "Invalid input. Please enter valid numbers."
+        except Exception as e:
+            error = f"Simulation failed: {e}"
+
+    return render_template(
+        "simulator.html", report=report_data, error=error, form=form_data
+    )
+
+
+@app.route("/schedule")
+def schedule_page():
+    from scheduler import check_new_filings, get_current_filing_period
+    from datetime import datetime
+
+    period = get_current_filing_period()
+    filing_info = check_new_filings()
+
+    year = datetime.now().year
+    deadlines = [
+        {"quarter": f"{year-1}-Q4", "quarter_end": f"{year-1}-12-31", "deadline": f"{year}-02-14"},
+        {"quarter": f"{year}-Q1", "quarter_end": f"{year}-03-31", "deadline": f"{year}-05-15"},
+        {"quarter": f"{year}-Q2", "quarter_end": f"{year}-06-30", "deadline": f"{year}-08-14"},
+        {"quarter": f"{year}-Q3", "quarter_end": f"{year}-09-30", "deadline": f"{year}-11-14"},
+        {"quarter": f"{year}-Q4", "quarter_end": f"{year}-12-31", "deadline": f"{year+1}-02-14"},
+    ]
+
+    return render_template(
+        "schedule.html",
+        period=period,
+        filing_info=filing_info,
+        deadlines=deadlines,
+    )
+
+
+# ─── API Endpoints (AJAX) ───────────────────────────────────────────────────
+
+
+@app.route("/api/fetch", methods=["POST"])
+def api_fetch():
+    """Start fetching data in background thread."""
+    with _task_lock:
+        if _task_state["running"]:
+            return jsonify({"status": "already_running"})
+
+    quarters = int(request.json.get("quarters", 2)) if request.is_json else 2
+
+    def _do_fetch():
+        try:
+            from data_fetcher import fetch_all_investors
+
+            _set_task(running=True, message="Fetching 13F filings from SEC EDGAR...")
+            fetch_all_investors(num_quarters=quarters)
+            _set_task(running=False, message="Fetch complete!", done=True)
+        except Exception as e:
+            _set_task(running=False, error=str(e), done=True)
+
+    thread = threading.Thread(target=_do_fetch, daemon=True)
+    thread.start()
+    return jsonify({"status": "started"})
+
+
+@app.route("/api/fetch-status")
+def api_fetch_status():
+    with _task_lock:
+        return jsonify(dict(_task_state))
+
+
+@app.route("/api/fetch-reset", methods=["POST"])
+def api_fetch_reset():
+    _set_task()
+    return jsonify({"status": "reset"})
+
+
+# ─── Template Filters ────────────────────────────────────────────────────────
+
+
+@app.template_filter("currency")
+def currency_filter(value):
+    try:
+        return f"${float(value):,.2f}"
+    except (ValueError, TypeError):
+        return "$0.00"
+
+
+@app.template_filter("pct")
+def pct_filter(value):
+    try:
+        return f"{float(value):,.1f}%"
+    except (ValueError, TypeError):
+        return "0.0%"
+
+
+@app.template_filter("big_number")
+def big_number_filter(value):
+    try:
+        v = float(value)
+        if v >= 1_000_000:
+            return f"${v / 1_000_000:,.1f}T"
+        if v >= 1_000:
+            return f"${v / 1_000:,.1f}B"
+        return f"${v:,.1f}M"
+    except (ValueError, TypeError):
+        return "$0"
+
+
+# ─── Run ─────────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)

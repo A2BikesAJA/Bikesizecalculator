@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Filing Schedule - Coattail Investor{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h4 class="fw-bold mb-1">13F Filing Schedule</h4>
+        <p class="text-muted small mb-0">Track SEC 13F filing deadlines and investor filing status</p>
+    </div>
+</div>
+
+<!-- Current Period -->
+<div class="stats-row mb-4">
+    <div class="card card-metric">
+        <div class="metric-value">{{ period.quarter }}</div>
+        <div class="metric-label">Current Quarter</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value
+            {% if period.status == 'OVERDUE' %}text-danger
+            {% elif period.status == 'DUE SOON' %}text-warning
+            {% elif period.status == 'UPCOMING' %}text-success
+            {% else %}text-muted{% endif %}">
+            {{ period.status }}
+        </div>
+        <div class="metric-label">Deadline Status</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value">{{ period.days_until_deadline }}</div>
+        <div class="metric-label">Days Until Deadline</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value text-accent">{{ filing_info.filed_count }}/{{ filing_info.total_investors }}</div>
+        <div class="metric-label">Filed</div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Deadlines -->
+    <div class="col-md-5">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-calendar3 me-2"></i>Filing Deadlines</h6>
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Quarter</th>
+                                <th>Quarter End</th>
+                                <th>Filing Deadline</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in deadlines %}
+                            <tr {% if d.quarter == period.quarter %}class="table-active"{% endif %}>
+                                <td class="fw-semibold">{{ d.quarter }}</td>
+                                <td>{{ d.quarter_end }}</td>
+                                <td>{{ d.deadline }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Investor Status -->
+    <div class="col-md-7">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-people me-2"></i>Investor Filing Status</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-center" style="width:60px">Status</th>
+                                <th>Investor</th>
+                                <th>Latest Quarter</th>
+                                <th>Filing Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in filing_info.all_statuses %}
+                            <tr>
+                                <td class="text-center">
+                                    {% if s.has_filed %}
+                                        <span class="badge bg-success bg-opacity-25 text-success">OK</span>
+                                    {% else %}
+                                        <span class="badge bg-warning bg-opacity-25 text-warning">WAIT</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="/investor/{{ s.name }}" class="text-decoration-none fw-semibold">{{ s.name }}</a>
+                                </td>
+                                <td>{{ s.latest_quarter }}</td>
+                                <td>{{ s.filing_date }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Coattail Investor{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg border-bottom">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <i class="bi bi-graph-up-arrow me-2 text-accent"></i>
+                <span class="fw-bold">Coattail Investor</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">
+                            <i class="bi bi-speedometer2 me-1"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/investors' in request.path %}active{% endif %}" href="/investors">
+                            <i class="bi bi-people me-1"></i>Investors
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/consensus' in request.path %}active{% endif %}" href="/consensus">
+                            <i class="bi bi-bullseye me-1"></i>Consensus
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/stock' in request.path %}active{% endif %}" href="/stock">
+                            <i class="bi bi-search me-1"></i>Stock Lookup
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/allocate' in request.path %}active{% endif %}" href="/allocate">
+                            <i class="bi bi-pie-chart me-1"></i>Allocator
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/simulate' in request.path %}active{% endif %}" href="/simulate">
+                            <i class="bi bi-lightning me-1"></i>Simulator
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/schedule' in request.path %}active{% endif %}" href="/schedule">
+                            <i class="bi bi-calendar3 me-1"></i>Schedule
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center">
+                    <button class="btn btn-sm btn-outline-success" id="fetchBtn" onclick="startFetch()">
+                        <i class="bi bi-cloud-download me-1"></i>Fetch Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Fetch progress banner -->
+    <div id="fetchBanner" class="alert alert-info alert-dismissible mb-0 rounded-0 d-none">
+        <div class="container-fluid d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" id="fetchSpinner"></div>
+            <span id="fetchMessage">Fetching data...</span>
+            <button type="button" class="btn-close" id="fetchClose" onclick="closeFetchBanner()" style="display:none"></button>
+        </div>
+    </div>
+
+    <main class="container-fluid py-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-top py-3 mt-4">
+        <div class="container-fluid text-center text-muted small">
+            Coattail Investor Research Tool &mdash; Data sourced from SEC EDGAR 13F filings.
+            Not financial advice.
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
