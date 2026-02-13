@@ -63,6 +63,15 @@
     </div>
 </div>
 
+{% if not report %}
+<div class="text-center mt-3 mb-4">
+    <span class="text-muted small me-2">Don't have a portfolio yet?</span>
+    <a href="/allocate" class="btn btn-sm btn-outline-light">
+        <i class="bi bi-pie-chart me-1"></i>Build Portfolio First
+    </a>
+</div>
+{% endif %}
+
 {% if error %}
 <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>
 {% endif %}
@@ -347,6 +356,22 @@
         </div>
     </div>
 </div>
+
+<!-- Link to Portfolio Allocator -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="fw-bold mb-1"><i class="bi bi-pie-chart text-info me-2"></i>Build Your Portfolio</h6>
+                <p class="text-muted small mb-0">Use the Portfolio Allocator to get exact buy orders — which stocks, how many shares, and at what price.</p>
+            </div>
+            <a href="/allocate" class="btn btn-accent">
+                <i class="bi bi-pie-chart me-1"></i>Build Portfolio
+            </a>
+        </div>
+    </div>
+</div>
+
 {% endif %}
 {% endblock %}
 

@@ -279,9 +279,13 @@ def simulate_page():
     report_data = None
     error = None
     form_data = {
-        "dollars": 20000, "years": 5, "simulations": 10000, "seed": 42,
-        "monthly_contribution": 0, "dividend_yield": 1.5,
-        "dividend_mode": "reinvest",
+        "dollars": float(request.args.get("dollars", 20000)),
+        "years": int(request.args.get("years", 5)),
+        "simulations": int(request.args.get("simulations", 10000)),
+        "seed": int(request.args.get("seed", 42)),
+        "monthly_contribution": float(request.args.get("monthly_contribution", 0)),
+        "dividend_yield": float(request.args.get("dividend_yield", 1.5)),
+        "dividend_mode": request.args.get("dividend_mode", "reinvest"),
     }
 
     if request.method == "POST":
