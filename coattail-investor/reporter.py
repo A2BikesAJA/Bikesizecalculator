@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Report Generation for Coattail Investor Tool.
 

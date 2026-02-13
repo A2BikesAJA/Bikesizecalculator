@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Portfolio Allocation Engine for Coattail Investor Tool.
 

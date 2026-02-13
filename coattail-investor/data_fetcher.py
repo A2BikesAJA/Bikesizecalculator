@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 SEC EDGAR Data Fetcher for 13F filings.
 
