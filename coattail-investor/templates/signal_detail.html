@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+{% block title %}{{ stock.ticker if stock else 'Signal' }} Analysis - Coattail Investor{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="card">
+    <div class="empty-state">
+        <i class="bi bi-exclamation-circle d-block"></i>
+        <h5>{{ error }}</h5>
+        <a href="/signals" class="btn btn-accent mt-3">Back to Signals</a>
+    </div>
+</div>
+
+{% elif stock %}
+{% set rec = stock.recommendation %}
+{% set ind = stock.indicators %}
+{% set news = stock.news %}
+
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h4 class="fw-bold mb-1">{{ stock.ticker }} <span class="text-muted fw-normal">{{ stock.name }}</span></h4>
+        <p class="text-muted small mb-0">
+            Full signal analysis as of {{ rec.as_of }} |
+            Consensus Score: {{ "%.1f"|format(stock.consensus_score) }} |
+            {{ stock.num_holders }} institutional holders |
+            <span class="direction dir-{{ stock.direction|lower }}">{{ stock.direction }}</span>
+        </p>
+    </div>
+    <div class="text-end">
+        {% set action = rec.overall_action %}
+        <span class="badge fs-5 {% if action == 'BUY NOW' %}bg-success{% elif action == 'ACCUMULATE' %}bg-success bg-opacity-75{% elif action == 'WAIT FOR DIP' %}bg-warning text-dark{% elif action == 'AVOID' %}bg-danger{% else %}bg-secondary{% endif %}">
+            {{ action }}
+        </span>
+        <div class="small text-muted mt-1">Confidence: {{ rec.overall_confidence }}</div>
+        <div class="fs-5 fw-bold mt-1">${{ "%.2f"|format(rec.current_price) }}</div>
+    </div>
+</div>
+
+<!-- Summary -->
+<div class="card mb-4">
+    <div class="card-body">
+        <p class="mb-0">{{ rec.summary }}</p>
+    </div>
+</div>
+
+<!-- Score gauges -->
+<div class="stats-row mb-4">
+    <div class="card card-metric">
+        <div class="metric-value {% if ind.composite_score > 20 %}text-success{% elif ind.composite_score < -20 %}text-danger{% else %}text-warning{% endif %}">{{ "%.0f"|format(ind.composite_score) }}</div>
+        <div class="metric-label">Composite Score</div>
+        <div class="small mt-1">
+            <span class="signal signal-{% if ind.composite_signal == 'BUY' %}green{% elif ind.composite_signal == 'SELL' %}red{% else %}yellow{% endif %}">{{ ind.composite_signal }}</span>
+            <span class="text-muted"> ({{ ind.signal_strength }})</span>
+        </div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value {% if ind.technical.score > 20 %}text-success{% elif ind.technical.score < -20 %}text-danger{% else %}text-warning{% endif %}">{{ "%.0f"|format(ind.technical.score) }}</div>
+        <div class="metric-label">Technical</div>
+        <div class="small mt-1"><span class="signal signal-{% if ind.technical.signal == 'BUY' %}green{% elif ind.technical.signal == 'SELL' %}red{% else %}yellow{% endif %}">{{ ind.technical.signal }}</span></div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value {% if ind.fundamental.score > 20 %}text-success{% elif ind.fundamental.score < -20 %}text-danger{% else %}text-warning{% endif %}">{{ "%.0f"|format(ind.fundamental.score) }}</div>
+        <div class="metric-label">Fundamental</div>
+        <div class="small mt-1"><span class="signal signal-{% if ind.fundamental.signal == 'BUY' %}green{% elif ind.fundamental.signal == 'SELL' %}red{% else %}yellow{% endif %}">{{ ind.fundamental.signal }}</span></div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value {% if news.news_signal == 'BULLISH' %}text-success{% elif news.news_signal == 'BEARISH' %}text-danger{% else %}text-warning{% endif %}">{{ news.news_signal }}</div>
+        <div class="metric-label">News Sentiment</div>
+        <div class="small mt-1 text-muted">{{ news.signal_strength }} confidence</div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left column: Technical + Fundamental -->
+    <div class="col-lg-6">
+
+        <!-- Technical Indicators -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-graph-up text-accent me-2"></i>Technical Indicators</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <tbody>
+                            {% if ind.technical.rsi_14 %}
+                            <tr>
+                                <td class="text-muted">RSI (14)</td>
+                                <td class="text-end fw-semibold {% if ind.technical.rsi_14 < 30 %}text-success{% elif ind.technical.rsi_14 > 70 %}text-danger{% endif %}">
+                                    {{ "%.1f"|format(ind.technical.rsi_14) }}
+                                    {% if ind.technical.rsi_14 < 30 %}<span class="small text-success ms-1">Oversold</span>{% elif ind.technical.rsi_14 > 70 %}<span class="small text-danger ms-1">Overbought</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% if ind.technical.sma_50 %}
+                            <tr>
+                                <td class="text-muted">SMA 50</td>
+                                <td class="text-end">${{ "%.2f"|format(ind.technical.sma_50) }}
+                                    {% if ind.technical.above_sma_50 %}<span class="text-success small ms-1"><i class="bi bi-check"></i> Above</span>{% else %}<span class="text-danger small ms-1"><i class="bi bi-x"></i> Below</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% if ind.technical.sma_200 %}
+                            <tr>
+                                <td class="text-muted">SMA 200</td>
+                                <td class="text-end">${{ "%.2f"|format(ind.technical.sma_200) }}
+                                    {% if ind.technical.above_sma_200 %}<span class="text-success small ms-1"><i class="bi bi-check"></i> Above</span>{% else %}<span class="text-danger small ms-1"><i class="bi bi-x"></i> Below</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td class="text-muted">MA Cross</td>
+                                <td class="text-end">
+                                    {% if ind.technical.golden_cross %}<span class="text-success fw-semibold"><i class="bi bi-sun"></i> Golden Cross</span>{% elif ind.technical.death_cross %}<span class="text-danger fw-semibold"><i class="bi bi-moon"></i> Death Cross</span>{% else %}<span class="text-muted">--</span>{% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">MACD</td>
+                                <td class="text-end">
+                                    {% if ind.technical.macd_bullish is not none %}
+                                    <span class="{% if ind.technical.macd_bullish %}text-success{% else %}text-danger{% endif %} fw-semibold">
+                                        {% if ind.technical.macd_bullish %}Bullish{% else %}Bearish{% endif %}
+                                    </span>
+                                    {% if ind.technical.macd_histogram %}
+                                    <span class="small text-muted ms-1">({{ "%.3f"|format(ind.technical.macd_histogram) }})</span>
+                                    {% endif %}
+                                    {% else %}--{% endif %}
+                                </td>
+                            </tr>
+                            {% if ind.technical.bb_position is not none %}
+                            <tr>
+                                <td class="text-muted">Bollinger Position</td>
+                                <td class="text-end">
+                                    {{ "%.0f"|format(ind.technical.bb_position * 100) }}%
+                                    {% if ind.technical.bb_position < 0.2 %}<span class="text-success small ms-1">Near lower</span>{% elif ind.technical.bb_position > 0.8 %}<span class="text-danger small ms-1">Near upper</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% if ind.technical.volume_ratio %}
+                            <tr>
+                                <td class="text-muted">Volume Ratio</td>
+                                <td class="text-end">{{ "%.2f"|format(ind.technical.volume_ratio) }}x avg</td>
+                            </tr>
+                            {% endif %}
+                            {% if ind.technical.high_52w %}
+                            <tr>
+                                <td class="text-muted">52-Week Range</td>
+                                <td class="text-end small">
+                                    ${{ "%.2f"|format(ind.technical.low_52w) }} - ${{ "%.2f"|format(ind.technical.high_52w) }}
+                                    <br><span class="text-muted">{{ "%.1f"|format(ind.technical.pct_from_high) }}% from high</span>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fundamental Indicators -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-bank text-accent me-2"></i>Fundamental Indicators</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <tbody>
+                            {% if ind.fundamental.pe_trailing %}
+                            <tr><td class="text-muted">P/E (Trailing)</td><td class="text-end">{{ "%.1f"|format(ind.fundamental.pe_trailing) }}</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.pe_forward %}
+                            <tr><td class="text-muted">P/E (Forward)</td><td class="text-end">{{ "%.1f"|format(ind.fundamental.pe_forward) }}</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.peg_ratio %}
+                            <tr><td class="text-muted">PEG Ratio</td><td class="text-end {% if ind.fundamental.peg_ratio < 1 %}text-success{% elif ind.fundamental.peg_ratio > 2 %}text-danger{% endif %}">{{ "%.2f"|format(ind.fundamental.peg_ratio) }}</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.price_to_book %}
+                            <tr><td class="text-muted">Price/Book</td><td class="text-end">{{ "%.2f"|format(ind.fundamental.price_to_book) }}</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.ev_to_ebitda %}
+                            <tr><td class="text-muted">EV/EBITDA</td><td class="text-end">{{ "%.1f"|format(ind.fundamental.ev_to_ebitda) }}</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.roe %}
+                            <tr><td class="text-muted">ROE</td><td class="text-end {% if ind.fundamental.roe > 20 %}text-success{% elif ind.fundamental.roe < 0 %}text-danger{% endif %}">{{ "%.1f"|format(ind.fundamental.roe) }}%</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.profit_margin %}
+                            <tr><td class="text-muted">Profit Margin</td><td class="text-end">{{ "%.1f"|format(ind.fundamental.profit_margin) }}%</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.revenue_growth %}
+                            <tr><td class="text-muted">Revenue Growth</td><td class="text-end {% if ind.fundamental.revenue_growth > 10 %}text-success{% elif ind.fundamental.revenue_growth < 0 %}text-danger{% endif %}">{{ "%.1f"|format(ind.fundamental.revenue_growth) }}%</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.earnings_growth %}
+                            <tr><td class="text-muted">Earnings Growth</td><td class="text-end {% if ind.fundamental.earnings_growth > 10 %}text-success{% elif ind.fundamental.earnings_growth < 0 %}text-danger{% endif %}">{{ "%.1f"|format(ind.fundamental.earnings_growth) }}%</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.debt_to_equity %}
+                            <tr><td class="text-muted">Debt/Equity</td><td class="text-end {% if ind.fundamental.debt_to_equity > 200 %}text-danger{% elif ind.fundamental.debt_to_equity < 50 %}text-success{% endif %}">{{ "%.0f"|format(ind.fundamental.debt_to_equity) }}%</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.fcf_yield %}
+                            <tr><td class="text-muted">FCF Yield</td><td class="text-end {% if ind.fundamental.fcf_yield > 5 %}text-success{% elif ind.fundamental.fcf_yield < 0 %}text-danger{% endif %}">{{ "%.1f"|format(ind.fundamental.fcf_yield) }}%</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.dividend_yield %}
+                            <tr><td class="text-muted">Dividend Yield</td><td class="text-end">{{ "%.2f"|format(ind.fundamental.dividend_yield) }}%</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.beta %}
+                            <tr><td class="text-muted">Beta</td><td class="text-end">{{ "%.2f"|format(ind.fundamental.beta) }}</td></tr>
+                            {% endif %}
+                            {% if ind.fundamental.market_cap %}
+                            <tr><td class="text-muted">Market Cap</td><td class="text-end">{{ ind.fundamental.market_cap|big_number }}</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Right column: Timing + News -->
+    <div class="col-lg-6">
+
+        <!-- Buy Zone -->
+        {% if rec.buy_zone %}
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-crosshair text-accent me-2"></i>Buy Zone</h6>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <div class="p-3 rounded text-center" style="background: rgba(0,217,126,0.1); border: 1px solid rgba(0,217,126,0.3);">
+                            <div class="small text-muted">Ideal Entry</div>
+                            <div class="fs-4 fw-bold text-accent">${{ "%.2f"|format(rec.buy_zone.ideal_entry) }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 rounded text-center" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color);">
+                            <div class="small text-muted">Current Price</div>
+                            <div class="fs-4 fw-bold">${{ "%.2f"|format(rec.current_price) }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <tbody>
+                            <tr><td class="text-muted">Buy Below</td><td class="text-end fw-semibold">${{ "%.2f"|format(rec.buy_zone.buy_below) }}</td></tr>
+                            <tr><td class="text-muted">Strong Buy Below</td><td class="text-end fw-semibold text-success">${{ "%.2f"|format(rec.buy_zone.strong_buy_below) }}</td></tr>
+                            <tr><td class="text-muted">Stop Loss</td><td class="text-end fw-semibold text-danger">${{ "%.2f"|format(rec.buy_zone.stop_loss) }}</td></tr>
+                            <tr><td class="text-muted">Risk/Reward</td><td class="text-end fw-semibold">{{ "%.1f"|format(rec.buy_zone.risk_reward_ratio) }}:1</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Horizon Recommendations -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-clock-history text-accent me-2"></i>Time Horizon Recommendations</h6>
+
+                {% for h in [rec.short_term, rec.medium_term, rec.long_term] %}
+                {% if h %}
+                <div class="mb-3 p-3 rounded" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color);">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0 small fw-bold text-uppercase">{{ h.horizon_label }}</h6>
+                        <span class="badge {% if h.action == 'BUY NOW' %}bg-success{% elif h.action == 'ACCUMULATE' %}bg-success bg-opacity-50{% elif h.action == 'WAIT FOR DIP' %}bg-warning text-dark{% elif h.action == 'AVOID' %}bg-danger{% else %}bg-secondary{% endif %}">
+                            {{ h.action }}
+                        </span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1 small">
+                        <span class="text-muted">Target Price</span>
+                        <span class="fw-semibold">${{ "%.2f"|format(h.target_price) }}
+                            <span class="{% if h.expected_return_pct > 0 %}text-success{% else %}text-danger{% endif %}">
+                                ({% if h.expected_return_pct > 0 %}+{% endif %}{{ "%.1f"|format(h.expected_return_pct) }}%)
+                            </span>
+                        </span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1 small">
+                        <span class="text-muted">Confidence</span>
+                        <span class="{% if h.confidence == 'HIGH' %}text-success{% elif h.confidence == 'MEDIUM' %}text-warning{% else %}text-muted{% endif %}">{{ h.confidence }}</span>
+                    </div>
+                    <div class="small mt-2">
+                        <strong>Strategy:</strong> {{ h.entry_strategy }}
+                    </div>
+                    {% if h.rationale %}
+                    <div class="mt-2">
+                        {% for r in h.rationale %}
+                        <div class="small text-muted"><i class="bi bi-dot"></i>{{ r }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Support & Resistance -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6 class="section-title"><i class="bi bi-rulers text-accent me-2"></i>Support & Resistance</h6>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <h6 class="small fw-bold text-success">Support Levels</h6>
+                        {% for s in rec.support_levels %}
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted">{{ s.source }}</span>
+                            <span>${{ "%.2f"|format(s.price) }} <span class="badge {% if s.strength == 'STRONG' %}bg-success{% elif s.strength == 'MODERATE' %}bg-warning text-dark{% else %}bg-secondary{% endif %}" style="font-size:.6rem">{{ s.strength }}</span></span>
+                        </div>
+                        {% endfor %}
+                        {% if not rec.support_levels %}<span class="small text-muted">No levels identified</span>{% endif %}
+                    </div>
+                    <div class="col-6">
+                        <h6 class="small fw-bold text-danger">Resistance Levels</h6>
+                        {% for r in rec.resistance_levels %}
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted">{{ r.source }}</span>
+                            <span>${{ "%.2f"|format(r.price) }} <span class="badge {% if r.strength == 'STRONG' %}bg-danger{% elif r.strength == 'MODERATE' %}bg-warning text-dark{% else %}bg-secondary{% endif %}" style="font-size:.6rem">{{ r.strength }}</span></span>
+                        </div>
+                        {% endfor %}
+                        {% if not rec.resistance_levels %}<span class="small text-muted">No levels identified</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bull / Bear Case -->
+        <div class="row g-3 mb-4">
+            <div class="col-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="small fw-bold text-success mb-2"><i class="bi bi-arrow-up-circle me-1"></i>Bull Case</h6>
+                        {% for b in rec.bull_case %}
+                        <div class="small mb-1"><i class="bi bi-check text-success me-1"></i>{{ b }}</div>
+                        {% endfor %}
+                        {% if not rec.bull_case %}<span class="small text-muted">No strong bull arguments identified</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="small fw-bold text-danger mb-2"><i class="bi bi-arrow-down-circle me-1"></i>Bear Case</h6>
+                        {% for b in rec.bear_case %}
+                        <div class="small mb-1"><i class="bi bi-x text-danger me-1"></i>{{ b }}</div>
+                        {% endfor %}
+                        {% if not rec.bear_case %}<span class="small text-muted">No strong bear arguments identified</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Key Factors -->
+{% if ind.key_factors %}
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="section-title"><i class="bi bi-key text-accent me-2"></i>Key Factors Driving the Signal</h6>
+        <div class="row">
+            {% for f in ind.key_factors %}
+            <div class="col-md-6 mb-1">
+                <span class="small"><i class="bi bi-arrow-right-short text-accent me-1"></i>{{ f }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- News Articles -->
+{% if news.articles %}
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="section-title"><i class="bi bi-newspaper text-accent me-2"></i>Recent News ({{ news.article_count }} articles)</h6>
+        <p class="small text-muted">{{ news.outlook }}</p>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width:80px">Sentiment</th>
+                        <th>Headline</th>
+                        <th>Source</th>
+                        <th class="text-center">Impact</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in news.articles %}
+                    <tr>
+                        <td class="text-center">
+                            <span class="badge {% if a.sentiment == 'positive' %}bg-success{% elif a.sentiment == 'negative' %}bg-danger{% else %}bg-secondary{% endif %} bg-opacity-25 {% if a.sentiment == 'positive' %}text-success{% elif a.sentiment == 'negative' %}text-danger{% else %}text-muted{% endif %}">
+                                {% if a.sentiment_score > 0 %}+{% endif %}{{ "%.2f"|format(a.sentiment_score) }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener" class="text-light text-decoration-none">{{ a.title }}</a>{% else %}{{ a.title }}{% endif %}
+                        </td>
+                        <td class="small text-muted">{{ a.source }}</td>
+                        <td class="text-center">
+                            {% if a.impact == 'growth_opportunity' %}<span class="text-success small"><i class="bi bi-graph-up"></i></span>
+                            {% elif a.impact == 'sell_off_risk' %}<span class="text-danger small"><i class="bi bi-graph-down"></i></span>
+                            {% else %}<span class="text-muted small"><i class="bi bi-dash"></i></span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="d-flex justify-content-between">
+    <a href="/signals" class="btn btn-outline-light"><i class="bi bi-arrow-left me-1"></i>Back to Signals</a>
+    <a href="/consensus" class="btn btn-outline-light"><i class="bi bi-bullseye me-1"></i>Consensus Analysis</a>
+</div>
+
+{% endif %}
+
+<div class="text-center text-muted small mt-4">
+    <i class="bi bi-info-circle me-1"></i>
+    This analysis combines technical indicators, fundamental data, and news sentiment.
+    This is not financial advice. Always do your own research before investing.
+</div>
+{% endblock %}

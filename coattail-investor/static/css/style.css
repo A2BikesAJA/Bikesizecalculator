@@ -230,6 +230,42 @@ body {
     opacity: .4;
 }
 
+/* ─── Score bar (for indicator scores) ─────────────────────────────────── */
+
+.score-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+    position: relative;
+}
+
+.score-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width .4s ease;
+    position: absolute;
+    left: 50%;
+}
+
+.score-bar-fill.positive {
+    background: #22c55e;
+    transform: none;
+}
+
+.score-bar-fill.negative {
+    background: #ef4444;
+    transform: translateX(-100%);
+}
+
+/* ─── Action badges ──────────────────────────────────────────────────────── */
+
+.action-buy-now { background: #166534; color: #4ade80; }
+.action-accumulate { background: #14532d; color: #86efac; }
+.action-wait { background: #713f12; color: #fde047; }
+.action-avoid { background: #7f1d1d; color: #fca5a5; }
+.action-hold { background: #1e293b; color: #94a3b8; }
+
 /* ─── Responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {

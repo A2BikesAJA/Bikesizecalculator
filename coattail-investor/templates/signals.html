@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block title %}Signals & Timing - Coattail Investor{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h4 class="fw-bold mb-1"><i class="bi bi-activity text-accent me-2"></i>Signals & Purchase Timing</h4>
+        <p class="text-muted small mb-0">Key indicators, AI news analysis, and purchase recommendations for consensus picks</p>
+    </div>
+</div>
+
+{% if error %}
+<div class="card">
+    <div class="empty-state">
+        <i class="bi bi-inbox d-block"></i>
+        <h5>{{ error }}</h5>
+        <p>Click <strong>Fetch Data</strong> in the navbar to download filings, then visit <strong>Consensus</strong> first.</p>
+    </div>
+</div>
+
+{% elif stocks %}
+
+<!-- Summary overview -->
+<div class="stats-row mb-4">
+    <div class="card card-metric">
+        <div class="metric-value">{{ stocks|length }}</div>
+        <div class="metric-label">Stocks Analyzed</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value text-success">{{ stocks|selectattr('recommendation')|selectattr('recommendation.overall_action', 'equalto', 'BUY NOW')|list|length + stocks|selectattr('recommendation')|selectattr('recommendation.overall_action', 'equalto', 'ACCUMULATE')|list|length }}</div>
+        <div class="metric-label">Buy / Accumulate</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value text-warning">{{ stocks|selectattr('recommendation')|selectattr('recommendation.overall_action', 'equalto', 'WAIT FOR DIP')|list|length }}</div>
+        <div class="metric-label">Wait for Dip</div>
+    </div>
+    <div class="card card-metric">
+        <div class="metric-value text-danger">{{ stocks|selectattr('recommendation')|selectattr('recommendation.overall_action', 'equalto', 'AVOID')|list|length }}</div>
+        <div class="metric-label">Avoid</div>
+    </div>
+</div>
+
+<!-- Main signals table -->
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="section-title"><i class="bi bi-table text-accent me-2"></i>Consensus Picks -- Signals Overview</h6>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Company</th>
+                        <th class="text-center">Action</th>
+                        <th class="text-center">Confidence</th>
+                        <th class="text-center">Technical</th>
+                        <th class="text-center">Fundamental</th>
+                        <th class="text-center">News</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Buy Below</th>
+                        <th class="text-center">Holders</th>
+                        <th class="text-center">Direction</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in stocks %}
+                    <tr>
+                        <td class="fw-bold">{{ s.ticker }}</td>
+                        <td>{{ s.name[:30] }}{% if s.name|length > 30 %}...{% endif %}</td>
+                        <td class="text-center">
+                            {% set action = s.recommendation.overall_action %}
+                            <span class="badge {% if action == 'BUY NOW' %}bg-success{% elif action == 'ACCUMULATE' %}bg-success bg-opacity-75{% elif action == 'WAIT FOR DIP' %}bg-warning text-dark{% elif action == 'AVOID' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                {{ action }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {% set conf = s.recommendation.overall_confidence %}
+                            <span class="{% if conf == 'HIGH' %}text-success{% elif conf == 'MEDIUM' %}text-warning{% else %}text-muted{% endif %} fw-semibold small">{{ conf }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% set tsig = s.indicators.technical.signal %}
+                            <span class="signal signal-{% if tsig == 'BUY' %}green{% elif tsig == 'SELL' %}red{% else %}yellow{% endif %}">{{ tsig }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% set fsig = s.indicators.fundamental.signal %}
+                            <span class="signal signal-{% if fsig == 'BUY' %}green{% elif fsig == 'SELL' %}red{% else %}yellow{% endif %}">{{ fsig }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% set nsig = s.news.news_signal %}
+                            <span class="signal signal-{% if nsig == 'BULLISH' %}green{% elif nsig == 'BEARISH' %}red{% else %}yellow{% endif %}">{{ nsig }}</span>
+                        </td>
+                        <td class="text-end">${{ "%.2f"|format(s.recommendation.current_price) }}</td>
+                        <td class="text-end">
+                            {% if s.recommendation.buy_zone %}
+                                ${{ "%.2f"|format(s.recommendation.buy_zone.buy_below) }}
+                            {% else %}--{% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-primary bg-opacity-25 text-primary">{{ s.num_holders }}</span>
+                        </td>
+                        <td class="text-center">
+                            <span class="direction dir-{{ s.direction|lower }}">
+                                {% if s.direction == 'Adding' %}<i class="bi bi-arrow-up-short"></i>{% elif s.direction == 'Reducing' %}<i class="bi bi-arrow-down-short"></i>{% else %}<i class="bi bi-dash"></i>{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="/signals/{{ s.ticker }}" class="btn btn-sm btn-outline-light">Detail</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Per-stock cards -->
+{% for s in stocks %}
+<div class="card mb-4" id="stock-{{ s.ticker }}">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <h5 class="fw-bold mb-0">{{ s.ticker }} <span class="text-muted fw-normal">{{ s.name }}</span></h5>
+                <span class="text-muted small">Consensus Score: {{ "%.1f"|format(s.consensus_score) }} | {{ s.num_holders }} institutional holders | {{ s.direction }}</span>
+            </div>
+            <div class="text-end">
+                {% set action = s.recommendation.overall_action %}
+                <span class="badge fs-6 {% if action == 'BUY NOW' %}bg-success{% elif action == 'ACCUMULATE' %}bg-success bg-opacity-75{% elif action == 'WAIT FOR DIP' %}bg-warning text-dark{% elif action == 'AVOID' %}bg-danger{% else %}bg-secondary{% endif %}">
+                    {{ action }}
+                </span>
+                <div class="text-muted small mt-1">${{ "%.2f"|format(s.recommendation.current_price) }}</div>
+            </div>
+        </div>
+
+        <p class="mb-3">{{ s.recommendation.summary }}</p>
+
+        <div class="row g-3">
+            <!-- Indicators column -->
+            <div class="col-md-4">
+                <h6 class="text-uppercase text-muted small fw-bold mb-2"><i class="bi bi-graph-up me-1"></i>Key Indicators</h6>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="small">Technical</span>
+                    <span class="signal signal-{% if s.indicators.technical.signal == 'BUY' %}green{% elif s.indicators.technical.signal == 'SELL' %}red{% else %}yellow{% endif %} small">
+                        {{ s.indicators.technical.signal }} ({{ "%.0f"|format(s.indicators.technical.score) }})
+                    </span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="small">Fundamental</span>
+                    <span class="signal signal-{% if s.indicators.fundamental.signal == 'BUY' %}green{% elif s.indicators.fundamental.signal == 'SELL' %}red{% else %}yellow{% endif %} small">
+                        {{ s.indicators.fundamental.signal }} ({{ "%.0f"|format(s.indicators.fundamental.score) }})
+                    </span>
+                </div>
+
+                {% if s.indicators.technical.rsi_14 %}
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small text-muted">RSI (14)</span>
+                    <span class="small {% if s.indicators.technical.rsi_14 < 30 %}text-success{% elif s.indicators.technical.rsi_14 > 70 %}text-danger{% endif %}">{{ "%.1f"|format(s.indicators.technical.rsi_14) }}</span>
+                </div>
+                {% endif %}
+                {% if s.indicators.technical.sma_50 %}
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small text-muted">SMA 50</span>
+                    <span class="small">${{ "%.2f"|format(s.indicators.technical.sma_50) }}</span>
+                </div>
+                {% endif %}
+                {% if s.indicators.technical.sma_200 %}
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small text-muted">SMA 200</span>
+                    <span class="small">${{ "%.2f"|format(s.indicators.technical.sma_200) }}</span>
+                </div>
+                {% endif %}
+                {% if s.indicators.fundamental.pe_forward or s.indicators.fundamental.pe_trailing %}
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small text-muted">P/E</span>
+                    <span class="small">{{ "%.1f"|format(s.indicators.fundamental.pe_forward or s.indicators.fundamental.pe_trailing) }}</span>
+                </div>
+                {% endif %}
+                {% if s.indicators.fundamental.peg_ratio %}
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small text-muted">PEG</span>
+                    <span class="small">{{ "%.2f"|format(s.indicators.fundamental.peg_ratio) }}</span>
+                </div>
+                {% endif %}
+                {% if s.indicators.fundamental.roe %}
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="small text-muted">ROE</span>
+                    <span class="small">{{ "%.1f"|format(s.indicators.fundamental.roe) }}%</span>
+                </div>
+                {% endif %}
+
+                {% if s.indicators.key_factors %}
+                <div class="mt-2">
+                    {% for factor in s.indicators.key_factors[:3] %}
+                    <div class="small text-muted"><i class="bi bi-info-circle me-1"></i>{{ factor }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- News column -->
+            <div class="col-md-4">
+                <h6 class="text-uppercase text-muted small fw-bold mb-2"><i class="bi bi-newspaper me-1"></i>News Sentiment</h6>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="small">Sentiment</span>
+                    <span class="signal signal-{% if s.news.news_signal == 'BULLISH' %}green{% elif s.news.news_signal == 'BEARISH' %}red{% else %}yellow{% endif %} small">
+                        {{ s.news.news_signal }} ({{ s.news.signal_strength }})
+                    </span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="small text-muted">Articles</span>
+                    <span class="small">
+                        <span class="text-success">{{ s.news.positive_count }}+</span> /
+                        <span class="text-danger">{{ s.news.negative_count }}-</span> /
+                        <span class="text-muted">{{ s.news.neutral_count }}</span>
+                    </span>
+                </div>
+                {% if s.news.growth_catalysts %}
+                <div class="mb-1">
+                    <span class="small text-success fw-semibold">Growth Catalysts:</span>
+                    {% for c in s.news.growth_catalysts[:2] %}
+                    <div class="small text-muted text-truncate"><i class="bi bi-check-circle text-success me-1"></i>{{ c[:80] }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if s.news.risk_factors %}
+                <div class="mb-1">
+                    <span class="small text-danger fw-semibold">Risk Factors:</span>
+                    {% for r in s.news.risk_factors[:2] %}
+                    <div class="small text-muted text-truncate"><i class="bi bi-exclamation-triangle text-danger me-1"></i>{{ r[:80] }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Timing column -->
+            <div class="col-md-4">
+                <h6 class="text-uppercase text-muted small fw-bold mb-2"><i class="bi bi-clock-history me-1"></i>Purchase Timing</h6>
+
+                {% if s.recommendation.buy_zone %}
+                <div class="mb-2 p-2 rounded" style="background: rgba(0,217,126,0.08); border: 1px solid rgba(0,217,126,0.2);">
+                    <div class="d-flex justify-content-between small">
+                        <span class="text-muted">Ideal Entry</span>
+                        <span class="fw-bold text-accent">${{ "%.2f"|format(s.recommendation.buy_zone.ideal_entry) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between small">
+                        <span class="text-muted">Buy Below</span>
+                        <span>${{ "%.2f"|format(s.recommendation.buy_zone.buy_below) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between small">
+                        <span class="text-muted">Strong Buy</span>
+                        <span class="text-success">${{ "%.2f"|format(s.recommendation.buy_zone.strong_buy_below) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between small">
+                        <span class="text-muted">Stop Loss</span>
+                        <span class="text-danger">${{ "%.2f"|format(s.recommendation.buy_zone.stop_loss) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between small">
+                        <span class="text-muted">Risk/Reward</span>
+                        <span>{{ "%.1f"|format(s.recommendation.buy_zone.risk_reward_ratio) }}:1</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% for h in [s.recommendation.short_term, s.recommendation.medium_term, s.recommendation.long_term] %}
+                {% if h %}
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="small text-muted">{{ h.horizon_label.split('(')[0] }}</span>
+                    <span class="badge {% if h.action == 'BUY NOW' %}bg-success{% elif h.action == 'ACCUMULATE' %}bg-success bg-opacity-50{% elif h.action == 'WAIT FOR DIP' %}bg-warning text-dark{% elif h.action == 'AVOID' %}bg-danger{% else %}bg-secondary{% endif %}" style="font-size:.65rem">{{ h.action }}</span>
+                    <span class="small {% if h.expected_return_pct > 0 %}text-success{% else %}text-danger{% endif %}">
+                        {% if h.expected_return_pct > 0 %}+{% endif %}{{ "%.1f"|format(h.expected_return_pct) }}%
+                    </span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="mt-3 text-end">
+            <a href="/signals/{{ s.ticker }}" class="btn btn-sm btn-accent">Full Analysis <i class="bi bi-arrow-right ms-1"></i></a>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endif %}
+
+<div class="text-center text-muted small mt-3">
+    <i class="bi bi-info-circle me-1"></i>
+    Signals are generated from technical indicators, fundamental analysis, and news sentiment.
+    This is not financial advice. Always do your own research before investing.
+</div>
+{% endblock %}

@@ -389,6 +389,271 @@ def schedule_page():
     )
 
 
+@app.route("/signals")
+def signals_page():
+    """
+    Signals & Timing page -- combines key indicators, news analysis,
+    and purchase timing recommendations for consensus picks.
+    """
+    from analyzer import build_consensus
+
+    all_data = _load_cached_data()
+    if not any(v for v in all_data.values()):
+        return render_template(
+            "signals.html", stocks=None,
+            error="No cached data. Fetch filings first.",
+        )
+
+    consensus = build_consensus(all_data)
+    watchlist = consensus.get("watchlist", [])
+    if not watchlist:
+        return render_template(
+            "signals.html", stocks=None,
+            error="No consensus watchlist available. Run Consensus analysis first.",
+        )
+
+    # Enrich with indicators, news, and purchase recommendations
+    try:
+        from indicators import analyze_stock_indicators
+        from news_analyzer import analyze_stock_news
+        from purchase_timing import generate_purchase_recommendation
+
+        enriched = []
+        for item in watchlist[:10]:  # Top 10 for performance
+            ticker = item.get("ticker", "")
+            name = item.get("name", "")
+            if not ticker or len(ticker) > 5 or not ticker.isalpha():
+                continue
+
+            # Run analysis
+            indicators = analyze_stock_indicators(ticker, name)
+            news = analyze_stock_news(ticker, name, max_articles=8)
+
+            news_score = news.avg_sentiment * 100 if news else 0
+            rec = generate_purchase_recommendation(
+                ticker=ticker,
+                name=name,
+                technical_score=indicators.technical.technical_score,
+                fundamental_score=indicators.fundamental.fundamental_score,
+                news_score=news_score,
+                consensus_score=item.get("consensus_score", 0),
+                num_holders=item.get("num_holders", 0),
+                direction=item.get("direction", "Steady"),
+            )
+
+            enriched.append({
+                "ticker": ticker,
+                "name": name,
+                "consensus_score": item.get("consensus_score", 0),
+                "num_holders": item.get("num_holders", 0),
+                "direction": item.get("direction", "Steady"),
+                "indicators": _indicators_to_dict(indicators),
+                "news": _news_to_dict(news),
+                "recommendation": _recommendation_to_dict(rec),
+            })
+
+    except Exception as e:
+        logger.error(f"Signals analysis failed: {e}")
+        return render_template(
+            "signals.html", stocks=None,
+            error=f"Analysis failed: {e}",
+        )
+
+    return render_template("signals.html", stocks=enriched, error=None)
+
+
+@app.route("/signals/<ticker>")
+def signal_detail(ticker):
+    """Detailed signal analysis for a single stock."""
+    from analyzer import build_consensus
+
+    all_data = _load_cached_data()
+    consensus = build_consensus(all_data) if any(v for v in all_data.values()) else {}
+    watchlist = consensus.get("watchlist", [])
+    item = next((w for w in watchlist if w.get("ticker", "").upper() == ticker.upper()), None)
+
+    try:
+        from indicators import analyze_stock_indicators
+        from news_analyzer import analyze_stock_news
+        from purchase_timing import generate_purchase_recommendation
+
+        indicators = analyze_stock_indicators(ticker, item.get("name", "") if item else "")
+        news = analyze_stock_news(ticker, item.get("name", "") if item else "", max_articles=12)
+
+        news_score = news.avg_sentiment * 100 if news else 0
+        rec = generate_purchase_recommendation(
+            ticker=ticker,
+            name=item.get("name", "") if item else "",
+            technical_score=indicators.technical.technical_score,
+            fundamental_score=indicators.fundamental.fundamental_score,
+            news_score=news_score,
+            consensus_score=item.get("consensus_score", 0) if item else 0,
+            num_holders=item.get("num_holders", 0) if item else 0,
+            direction=item.get("direction", "Steady") if item else "Steady",
+        )
+
+        stock = {
+            "ticker": ticker.upper(),
+            "name": item.get("name", ticker.upper()) if item else ticker.upper(),
+            "consensus_score": item.get("consensus_score", 0) if item else 0,
+            "num_holders": item.get("num_holders", 0) if item else 0,
+            "direction": item.get("direction", "Steady") if item else "Steady",
+            "indicators": _indicators_to_dict(indicators),
+            "news": _news_to_dict(news),
+            "recommendation": _recommendation_to_dict(rec),
+        }
+
+    except Exception as e:
+        logger.error(f"Signal detail failed for {ticker}: {e}")
+        return render_template(
+            "signal_detail.html", stock=None,
+            error=f"Analysis failed for {ticker}: {e}",
+        )
+
+    return render_template("signal_detail.html", stock=stock, error=None)
+
+
+def _indicators_to_dict(ind) -> dict:
+    """Convert StockIndicators dataclass to template-friendly dict."""
+    t = ind.technical
+    f = ind.fundamental
+    return {
+        "composite_score": ind.composite_score,
+        "composite_signal": ind.composite_signal,
+        "signal_strength": ind.signal_strength,
+        "key_factors": ind.key_factors,
+        "technical": {
+            "score": t.technical_score,
+            "signal": t.technical_signal,
+            "current_price": t.current_price,
+            "sma_50": t.sma_50,
+            "sma_200": t.sma_200,
+            "rsi_14": t.rsi_14,
+            "macd_bullish": t.macd_bullish,
+            "macd_histogram": t.macd_histogram,
+            "bb_position": t.bb_position,
+            "golden_cross": t.golden_cross,
+            "death_cross": t.death_cross,
+            "above_sma_50": t.above_sma_50,
+            "above_sma_200": t.above_sma_200,
+            "volume_ratio": t.volume_ratio,
+            "pct_from_high": t.pct_from_high,
+            "pct_from_low": t.pct_from_low,
+            "high_52w": t.high_52w,
+            "low_52w": t.low_52w,
+            "error": t.error,
+        },
+        "fundamental": {
+            "score": f.fundamental_score,
+            "signal": f.fundamental_signal,
+            "pe_trailing": f.pe_trailing,
+            "pe_forward": f.pe_forward,
+            "peg_ratio": f.peg_ratio,
+            "price_to_book": f.price_to_book,
+            "price_to_sales": f.price_to_sales,
+            "ev_to_ebitda": f.ev_to_ebitda,
+            "roe": f.roe,
+            "roa": f.roa,
+            "profit_margin": f.profit_margin,
+            "operating_margin": f.operating_margin,
+            "revenue_growth": f.revenue_growth,
+            "earnings_growth": f.earnings_growth,
+            "debt_to_equity": f.debt_to_equity,
+            "current_ratio": f.current_ratio,
+            "free_cash_flow": f.free_cash_flow,
+            "fcf_yield": f.fcf_yield,
+            "dividend_yield": f.dividend_yield,
+            "market_cap": f.market_cap,
+            "beta": f.beta,
+            "error": f.error,
+        },
+    }
+
+
+def _news_to_dict(news) -> dict:
+    """Convert StockNewsAnalysis to template-friendly dict."""
+    return {
+        "article_count": news.article_count,
+        "avg_sentiment": news.avg_sentiment,
+        "positive_count": news.positive_count,
+        "negative_count": news.negative_count,
+        "neutral_count": news.neutral_count,
+        "news_signal": news.news_signal,
+        "signal_strength": news.signal_strength,
+        "outlook": news.outlook,
+        "growth_catalysts": news.growth_catalysts,
+        "risk_factors": news.risk_factors,
+        "articles": [
+            {
+                "title": a.title,
+                "source": a.source,
+                "url": a.url,
+                "published": a.published,
+                "sentiment": a.sentiment,
+                "sentiment_score": a.sentiment_score,
+                "impact": a.impact,
+            }
+            for a in news.articles[:10]
+        ],
+        "error": news.error,
+    }
+
+
+def _recommendation_to_dict(rec) -> dict:
+    """Convert PurchaseRecommendation to template-friendly dict."""
+    def _horizon_dict(h):
+        if h is None:
+            return None
+        return {
+            "horizon": h.horizon,
+            "horizon_label": h.horizon_label,
+            "action": h.action,
+            "confidence": h.confidence,
+            "target_price": h.target_price,
+            "expected_return_pct": h.expected_return_pct,
+            "entry_strategy": h.entry_strategy,
+            "rationale": h.rationale,
+        }
+
+    def _buy_zone_dict(bz):
+        if bz is None:
+            return None
+        return {
+            "ideal_entry": bz.ideal_entry,
+            "buy_below": bz.buy_below,
+            "strong_buy_below": bz.strong_buy_below,
+            "stop_loss": bz.stop_loss,
+            "risk_reward_ratio": bz.risk_reward_ratio,
+        }
+
+    return {
+        "current_price": rec.current_price,
+        "as_of": rec.as_of,
+        "overall_action": rec.overall_action,
+        "overall_confidence": rec.overall_confidence,
+        "summary": rec.summary,
+        "buy_zone": _buy_zone_dict(rec.buy_zone),
+        "support_levels": [
+            {"price": s.price, "source": s.source, "strength": s.strength}
+            for s in rec.support_levels
+        ],
+        "resistance_levels": [
+            {"price": r.price, "source": r.source, "strength": r.strength}
+            for r in rec.resistance_levels
+        ],
+        "short_term": _horizon_dict(rec.short_term),
+        "medium_term": _horizon_dict(rec.medium_term),
+        "long_term": _horizon_dict(rec.long_term),
+        "bull_case": rec.bull_case,
+        "bear_case": rec.bear_case,
+        "technical_score": rec.technical_score,
+        "fundamental_score": rec.fundamental_score,
+        "news_score": rec.news_score,
+        "consensus_score": rec.consensus_score,
+        "error": rec.error,
+    }
+
+
 # ─── API Endpoints (AJAX) ───────────────────────────────────────────────────
 
 
