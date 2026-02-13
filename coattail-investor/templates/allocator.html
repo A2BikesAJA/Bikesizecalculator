@@ -84,12 +84,100 @@
     </div>
 </div>
 
+<!-- Shopping List -->
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="section-title"><i class="bi bi-cart-check text-accent me-2"></i>Shopping List &mdash; What to Buy</h6>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ticker</th>
+                        <th>Company</th>
+                        <th class="text-end">Current Price</th>
+                        <th class="text-end">Shares to Buy</th>
+                        <th class="text-end">Cost</th>
+                        <th class="text-end">Weight</th>
+                        <th class="text-center">Signal</th>
+                        <th class="text-center">Direction</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in allocation.positions %}
+                    <tr>
+                        <td class="text-muted">{{ loop.index }}</td>
+                        <td class="fw-bold text-accent">{{ p.ticker }}</td>
+                        <td>{{ p.name[:30] }}{% if p.name|length > 30 %}...{% endif %}</td>
+                        <td class="text-end">
+                            {% if p.share_price %}
+                                ${{ "%.2f"|format(p.share_price) }}
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end fw-bold">
+                            {% if p.shares_fractional > 0 %}
+                                {{ "%.4f"|format(p.shares_fractional) }}
+                            {% elif p.shares_whole > 0 %}
+                                {{ p.shares_whole }}
+                            {% else %}
+                                <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if p.share_price %}
+                                {% if p.shares_fractional > 0 %}
+                                    ${{ "%.2f"|format(p.shares_fractional * p.share_price) }}
+                                {% elif p.shares_whole > 0 %}
+                                    ${{ "%.2f"|format(p.shares_whole * p.share_price) }}
+                                {% else %}
+                                    <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            {% else %}
+                                {{ p.dollar_allocation|currency }}
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ "%.1f"|format(p.final_weight_pct) }}%</td>
+                        <td class="text-center">
+                            {% set sig = p.valuation_signal %}
+                            <span class="badge {% if sig == 'GREEN' %}bg-success{% elif sig == 'YELLOW' %}bg-warning text-dark{% elif sig == 'RED' %}bg-danger{% else %}bg-secondary{% endif %}">{{ sig }}</span>
+                        </td>
+                        <td class="text-center">
+                            <span class="direction dir-{{ p.direction|lower }}">
+                                {% if p.direction == 'Adding' %}<i class="bi bi-arrow-up-short"></i> Adding
+                                {% elif p.direction == 'Reducing' %}<i class="bi bi-arrow-down-short"></i> Reducing
+                                {% else %}<i class="bi bi-dash"></i> Steady{% endif %}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="border-top">
+                        <td colspan="5" class="text-end fw-bold">Total Cost:</td>
+                        <td class="text-end fw-bold text-accent">{{ allocation.cash_invested|currency }}</td>
+                        <td colspan="3"></td>
+                    </tr>
+                    {% if allocation.cash_remaining > 0.01 %}
+                    <tr>
+                        <td colspan="5" class="text-end text-muted small">Uninvested Cash:</td>
+                        <td class="text-end text-muted small">{{ allocation.cash_remaining|currency }}</td>
+                        <td colspan="3"></td>
+                    </tr>
+                    {% endif %}
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
 <div class="row g-4">
     <!-- Pie Chart -->
     <div class="col-lg-5">
         <div class="card h-100">
             <div class="card-body">
-                <h6 class="section-title">Allocation Breakdown</h6>
+                <h6 class="section-title"><i class="bi bi-pie-chart text-accent me-2"></i>Allocation Breakdown</h6>
                 <div class="chart-container" style="height: 320px;">
                     <canvas id="allocationPie"></canvas>
                 </div>
@@ -102,23 +190,21 @@
         </div>
     </div>
 
-    <!-- Positions Table -->
+    <!-- Position Details Table -->
     <div class="col-lg-7">
         <div class="card h-100">
             <div class="card-body">
-                <h6 class="section-title">Position Details</h6>
+                <h6 class="section-title"><i class="bi bi-list-check text-accent me-2"></i>Position Details</h6>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead>
                             <tr>
                                 <th>Ticker</th>
                                 <th>Company</th>
-                                <th class="text-end">Weight</th>
-                                <th class="text-end">Dollars</th>
-                                <th class="text-end">Price</th>
-                                <th class="text-end">Shares</th>
-                                <th class="text-center">Signal</th>
-                                <th class="text-center">Dir</th>
+                                <th class="text-end">Score</th>
+                                <th class="text-end">Holders</th>
+                                <th class="text-end">Avg Wt%</th>
+                                <th class="text-end">Target $</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -126,26 +212,10 @@
                             <tr>
                                 <td class="fw-bold">{{ p.ticker }}</td>
                                 <td class="small">{{ p.name[:25] }}{% if p.name|length > 25 %}...{% endif %}</td>
-                                <td class="text-end fw-semibold">{{ "%.1f"|format(p.final_weight_pct) }}%</td>
+                                <td class="text-end">{{ "%.1f"|format(p.consensus_score) }}</td>
+                                <td class="text-end">{{ p.num_holders }}</td>
+                                <td class="text-end">{{ "%.1f"|format(p.avg_weight) }}%</td>
                                 <td class="text-end">{{ p.dollar_allocation|currency }}</td>
-                                <td class="text-end">{% if p.share_price %}{{ p.share_price|currency }}{% else %}--{% endif %}</td>
-                                <td class="text-end">
-                                    {% if p.shares_fractional > 0 %}
-                                        {{ "%.2f"|format(p.shares_fractional) }}
-                                    {% elif p.shares_whole > 0 %}
-                                        {{ p.shares_whole }}
-                                    {% else %}
-                                        --
-                                    {% endif %}
-                                </td>
-                                <td class="text-center">
-                                    <span class="signal signal-{{ p.valuation_signal|lower }}">{{ p.valuation_signal }}</span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="direction dir-{{ p.direction|lower }}">
-                                        {% if p.direction == 'Adding' %}<i class="bi bi-arrow-up-short"></i>{% elif p.direction == 'Reducing' %}<i class="bi bi-arrow-down-short"></i>{% else %}<i class="bi bi-dash"></i>{% endif %}
-                                    </span>
-                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>

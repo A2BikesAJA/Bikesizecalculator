@@ -12,6 +12,8 @@ import logging
 import math
 from dataclasses import dataclass, field
 
+import yfinance as yf
+
 from config import (
     ALLOC_MAX_SINGLE_POSITION_PCT,
     ALLOC_MIN_POSITION_SIZE,
@@ -19,6 +21,23 @@ from config import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _fetch_current_price(ticker: str) -> float | None:
+    """Fetch the current market price for a ticker via yfinance."""
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info or {}
+        price = info.get("regularMarketPrice") or info.get("currentPrice")
+        if price:
+            return float(price)
+        fast = stock.fast_info
+        price = getattr(fast, "last_price", None)
+        if price:
+            return float(price)
+    except Exception as e:
+        logger.debug(f"Could not fetch price for {ticker}: {e}")
+    return None
 
 
 # ─── Data Structures ─────────────────────────────────────────────────────────
@@ -205,6 +224,12 @@ def allocate_portfolio(
 
         val = pick.get("valuation") or {}
         price = val.get("current_price")
+
+        # Fallback: fetch live price if valuation data is missing
+        if not price or price <= 0:
+            ticker = pick.get("ticker", "")
+            if ticker and len(ticker) <= 5 and ticker.isalpha():
+                price = _fetch_current_price(ticker)
 
         if price and price > 0:
             exact_shares = dollar_alloc / price
