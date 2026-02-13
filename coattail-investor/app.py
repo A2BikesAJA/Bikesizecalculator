@@ -260,6 +260,7 @@ def allocate_page():
                             "smallest_position_pct": alloc.smallest_position_pct,
                             "effective_positions": alloc.effective_positions,
                             "positions": [asdict(p) for p in alloc.positions],
+                            "skipped": alloc.skipped,
                         }
         except ValueError:
             error = "Invalid input. Please enter valid numbers."
