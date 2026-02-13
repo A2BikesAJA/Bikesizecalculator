@@ -789,6 +789,343 @@ def generate_allocation_markdown(allocation, output_path: str | None = None) -> 
     return md_text
 
 
+# ─── Simulation Report ───────────────────────────────────────────────────────
+
+
+def print_simulation(report) -> None:
+    """Print the full simulation report to the terminal."""
+    from simulator import SimulationReport
+
+    initial = report.initial_investment
+    years = report.years
+
+    console.print()
+    console.print(Panel(
+        f"[bold cyan]COATTAIL INVESTMENT SCENARIO ANALYSIS[/bold cyan]\n"
+        f"Initial investment: [bold green]${initial:,.2f}[/bold green] | "
+        f"Horizon: [bold]{years} years[/bold]\n"
+        f"Monte Carlo simulations: [bold]{report.monte_carlo.num_simulations:,}[/bold]",
+        border_style="cyan",
+        expand=True,
+    ))
+
+    # ── Scenario comparison table ────────────────────────────────────────
+    console.print()
+    console.rule("[bold cyan]SCENARIO PROJECTIONS[/bold cyan]")
+    console.print()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Scenario", width=14)
+    table.add_column("Annual Return", justify="right", width=13)
+    table.add_column("Volatility", justify="right", width=10)
+    table.add_column(f"Value (Yr {years})", justify="right", width=14)
+    table.add_column("Total Return", justify="right", width=12)
+    table.add_column("Profit", justify="right", width=12)
+    table.add_column("CAGR", justify="right", width=7)
+
+    for s in report.scenarios:
+        # Color code by scenario type
+        if s.name == "bull":
+            style = "green"
+        elif s.name == "base":
+            style = "cyan"
+        elif s.name == "bear":
+            style = "yellow"
+        else:
+            style = "red"
+
+        profit_str = f"${s.total_profit:+,.0f}"
+        if s.total_profit >= 0:
+            profit_style = f"[green]{profit_str}[/green]"
+        else:
+            profit_style = f"[red]{profit_str}[/red]"
+
+        table.add_row(
+            f"[{style}]{s.label}[/{style}]",
+            f"{s.annual_return * 100:.1f}%",
+            f"{s.annual_volatility * 100:.0f}%",
+            f"[{style}]${s.final_value:,.0f}[/{style}]",
+            f"{s.total_return_pct:+.1f}%",
+            profit_style,
+            f"{s.cagr:.1f}%",
+        )
+
+    console.print(table)
+
+    # ── Year-by-year breakdown ───────────────────────────────────────────
+    console.print()
+    console.rule("[bold cyan]YEAR-BY-YEAR GROWTH[/bold cyan]")
+    console.print()
+
+    yr_table = Table(show_header=True, header_style="bold")
+    yr_table.add_column("Year", justify="center", width=5)
+    for s in report.scenarios:
+        yr_table.add_column(s.label, justify="right", width=14)
+
+    # Start row
+    yr_table.add_row("0", *[f"${initial:,.0f}" for _ in report.scenarios])
+
+    for yr in range(years):
+        row = [str(yr + 1)]
+        for s in report.scenarios:
+            val = s.yearly[yr].ending_value
+            ret = s.yearly[yr].annual_return_pct
+            row.append(f"${val:,.0f} ({ret:+.1f}%)")
+        yr_table.add_row(*row)
+
+    console.print(yr_table)
+
+    # ── Monte Carlo results ──────────────────────────────────────────────
+    mc = report.monte_carlo
+
+    console.print()
+    console.rule("[bold magenta]MONTE CARLO SIMULATION[/bold magenta]")
+    console.print(f"[dim]  {mc.num_simulations:,} simulated paths | "
+                  f"Base: {mc.annual_return * 100:.0f}% return, "
+                  f"{mc.annual_volatility * 100:.0f}% volatility[/dim]")
+    console.print()
+
+    # Outcome distribution
+    dist_table = Table(show_header=True, header_style="bold", title="Outcome Distribution")
+    dist_table.add_column("Percentile", justify="center", width=12)
+    dist_table.add_column(f"Portfolio Value (Yr {years})", justify="right", width=20)
+    dist_table.add_column("Total Return", justify="right", width=12)
+    dist_table.add_column("Profit/Loss", justify="right", width=14)
+
+    percentiles = [
+        ("5th (worst)", mc.p5),
+        ("10th", mc.p10),
+        ("25th", mc.p25),
+        ("50th (median)", mc.p50),
+        ("75th", mc.p75),
+        ("90th", mc.p90),
+        ("95th (best)", mc.p95),
+        ("Mean", mc.mean),
+    ]
+
+    for label, val in percentiles:
+        ret = (val - initial) / initial * 100
+        profit = val - initial
+        profit_str = f"${profit:+,.0f}"
+        if profit >= 0:
+            profit_style = f"[green]{profit_str}[/green]"
+        else:
+            profit_style = f"[red]{profit_str}[/red]"
+
+        dist_table.add_row(
+            label,
+            f"${val:,.0f}",
+            f"{ret:+.1f}%",
+            profit_style,
+        )
+
+    console.print(dist_table)
+
+    # Probability metrics
+    console.print()
+    console.print("[bold]Probability Analysis:[/bold]")
+    console.print(f"  [green]Chance of profit:        {mc.prob_profit:.1f}%[/green]")
+    console.print(f"  [green]Chance of doubling:      {mc.prob_double:.1f}%[/green]")
+    console.print(f"  [yellow]Chance of 10%+ loss:     {mc.prob_loss_10pct:.1f}%[/yellow]")
+    console.print(f"  [red]Chance of 25%+ loss:     {mc.prob_loss_25pct:.1f}%[/red]")
+
+    # ASCII median-path chart
+    console.print()
+    _print_growth_chart(mc, initial, years)
+
+    # Bottom line
+    console.print()
+    console.print(Panel(
+        f"[bold]BOTTOM LINE[/bold] for [green]${initial:,.0f}[/green] over {years} years:\n"
+        f"  Most likely outcome (median): [bold]${mc.p50:,.0f}[/bold] "
+        f"([green]{(mc.p50 - initial) / initial * 100:+.1f}%[/green])\n"
+        f"  Expected value (mean):        [bold]${mc.mean:,.0f}[/bold] "
+        f"([green]{(mc.mean - initial) / initial * 100:+.1f}%[/green])\n"
+        f"  Realistic range (10th-90th):  "
+        f"${mc.p10:,.0f} to ${mc.p90:,.0f}",
+        border_style="green",
+    ))
+    console.print()
+
+
+def _print_growth_chart(mc, initial: float, years: int) -> None:
+    """Print an ASCII chart of the median growth path with p25/p75 bands."""
+    console.rule("[bold]PROJECTED GROWTH PATH[/bold]")
+    console.print("[dim]  Shaded area = 25th-75th percentile range[/dim]")
+    console.print()
+
+    chart_height = 15
+    chart_width = min(years * 10, 60)
+
+    # Collect all values for scaling
+    all_vals = mc.p25_path + mc.p75_path + mc.median_path
+    min_val = min(all_vals) * 0.95
+    max_val = max(all_vals) * 1.05
+    val_range = max_val - min_val
+    if val_range == 0:
+        val_range = 1
+
+    # Build chart rows (top = high value, bottom = low value)
+    rows = []
+    for row in range(chart_height):
+        threshold = max_val - (row / (chart_height - 1)) * val_range
+        line = ""
+
+        for yr in range(years + 1):
+            # Map year to x position
+            col_width = chart_width // years if years > 0 else chart_width
+            median_v = mc.median_path[yr]
+            p25_v = mc.p25_path[yr]
+            p75_v = mc.p75_path[yr]
+
+            if abs(median_v - threshold) <= val_range / chart_height:
+                line += "[bold cyan]*[/bold cyan]"
+            elif p25_v <= threshold <= p75_v:
+                line += "[dim]:[/dim]"
+            else:
+                line += " "
+
+            # Fill between years
+            if yr < years:
+                for _ in range(col_width - 1):
+                    # Interpolate between this year and next
+                    frac = (_ + 1) / col_width
+                    interp_med = median_v + (mc.median_path[yr + 1] - median_v) * frac
+                    interp_25 = p25_v + (mc.p25_path[yr + 1] - p25_v) * frac
+                    interp_75 = p75_v + (mc.p75_path[yr + 1] - p75_v) * frac
+
+                    if abs(interp_med - threshold) <= val_range / chart_height:
+                        line += "[bold cyan]*[/bold cyan]"
+                    elif interp_25 <= threshold <= interp_75:
+                        line += "[dim]:[/dim]"
+                    else:
+                        line += " "
+
+        # Y-axis label
+        label = f"${threshold:>8,.0f}"
+        rows.append(f"  {label} |{line}|")
+
+    for row in rows:
+        console.print(row)
+
+    # X-axis
+    x_axis = "  " + " " * 9 + "+"
+    x_labels = "  " + " " * 9 + " "
+    col_width = chart_width // years if years > 0 else chart_width
+    for yr in range(years + 1):
+        if yr < years:
+            x_axis += "-" * col_width
+        x_labels += f"Yr{yr}" + " " * max(0, col_width - len(f"Yr{yr}"))
+    x_axis += "+"
+    console.print(x_axis)
+    console.print(x_labels)
+
+
+def generate_simulation_markdown(report, output_path: str | None = None) -> str:
+    """Generate a markdown report for the simulation results."""
+    initial = report.initial_investment
+    years = report.years
+    mc = report.monte_carlo
+    report_date = datetime.now().strftime("%Y-%m-%d")
+
+    lines = [
+        "# Coattail Investment Scenario Analysis",
+        "",
+        f"**Generated:** {report_date}",
+        f"**Initial investment:** ${initial:,.2f}",
+        f"**Horizon:** {years} years",
+        f"**Monte Carlo simulations:** {mc.num_simulations:,}",
+        "",
+        "## Scenario Projections",
+        "",
+        f"| Scenario | Annual Return | Volatility | Value (Yr {years}) | Total Return | Profit | CAGR |",
+        "|----------|---------------|------------|-------------|--------------|--------|------|",
+    ]
+
+    for s in report.scenarios:
+        lines.append(
+            f"| {s.label} | {s.annual_return * 100:.1f}% | "
+            f"{s.annual_volatility * 100:.0f}% | "
+            f"${s.final_value:,.0f} | {s.total_return_pct:+.1f}% | "
+            f"${s.total_profit:+,.0f} | {s.cagr:.1f}% |"
+        )
+
+    lines.append("")
+    lines.append("## Year-by-Year Growth")
+    lines.append("")
+    header = "| Year |"
+    sep = "|------|"
+    for s in report.scenarios:
+        header += f" {s.label} |"
+        sep += "------------|"
+    lines.append(header)
+    lines.append(sep)
+
+    row = "| 0 |"
+    for _ in report.scenarios:
+        row += f" ${initial:,.0f} |"
+    lines.append(row)
+
+    for yr in range(years):
+        row = f"| {yr + 1} |"
+        for s in report.scenarios:
+            val = s.yearly[yr].ending_value
+            ret = s.yearly[yr].annual_return_pct
+            row += f" ${val:,.0f} ({ret:+.1f}%) |"
+        lines.append(row)
+
+    lines.append("")
+    lines.append("## Monte Carlo Simulation")
+    lines.append("")
+    lines.append(f"*{mc.num_simulations:,} simulated paths, "
+                 f"{mc.annual_return * 100:.0f}% base return, "
+                 f"{mc.annual_volatility * 100:.0f}% volatility*")
+    lines.append("")
+    lines.append("### Outcome Distribution")
+    lines.append("")
+    lines.append("| Percentile | Portfolio Value | Total Return | Profit/Loss |")
+    lines.append("|------------|----------------|--------------|-------------|")
+
+    for label, val in [
+        ("5th (worst)", mc.p5), ("10th", mc.p10), ("25th", mc.p25),
+        ("50th (median)", mc.p50), ("75th", mc.p75), ("90th", mc.p90),
+        ("95th (best)", mc.p95), ("Mean", mc.mean),
+    ]:
+        ret = (val - initial) / initial * 100
+        profit = val - initial
+        lines.append(
+            f"| {label} | ${val:,.0f} | {ret:+.1f}% | ${profit:+,.0f} |"
+        )
+
+    lines.append("")
+    lines.append("### Probability Analysis")
+    lines.append("")
+    lines.append(f"- Chance of profit: **{mc.prob_profit:.1f}%**")
+    lines.append(f"- Chance of doubling: **{mc.prob_double:.1f}%**")
+    lines.append(f"- Chance of 10%+ loss: **{mc.prob_loss_10pct:.1f}%**")
+    lines.append(f"- Chance of 25%+ loss: **{mc.prob_loss_25pct:.1f}%**")
+    lines.append("")
+    lines.append("### Bottom Line")
+    lines.append("")
+    lines.append(f"For a **${initial:,.0f}** investment over **{years} years**:")
+    lines.append(f"- Most likely outcome (median): **${mc.p50:,.0f}** "
+                 f"({(mc.p50 - initial) / initial * 100:+.1f}%)")
+    lines.append(f"- Expected value (mean): **${mc.mean:,.0f}** "
+                 f"({(mc.mean - initial) / initial * 100:+.1f}%)")
+    lines.append(f"- Realistic range (10th-90th): **${mc.p10:,.0f}** to **${mc.p90:,.0f}**")
+    lines.append("")
+
+    md_text = "\n".join(lines)
+
+    if output_path:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w") as f:
+            f.write(md_text)
+        logger.info(f"Simulation report saved to {output_path}")
+
+    return md_text
+
+
 # ─── Utilities ───────────────────────────────────────────────────────────────
 
 

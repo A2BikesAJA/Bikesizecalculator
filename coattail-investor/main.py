@@ -15,6 +15,7 @@ Usage:
     python main.py report             # Generate markdown report
     python main.py schedule           # View filing schedule and set up automation
     python main.py allocate 10000     # Build a $10,000 portfolio from consensus picks
+    python main.py simulate 20000     # Project $20,000 returns over 5 years
 """
 
 import json
@@ -338,6 +339,55 @@ def allocate(dollars, strategy, max_positions, max_weight, min_position,
     if output:
         generate_allocation_markdown(allocation, output)
         console.print(f"\n[green]Allocation report saved to: {output}[/green]")
+
+
+@cli.command()
+@click.argument("dollars", type=float)
+@click.option("--years", "-y", type=int, default=5,
+              help="Investment horizon in years (default: 5)")
+@click.option("--simulations", "-n", type=int, default=10000,
+              help="Number of Monte Carlo paths (default: 10,000)")
+@click.option("--seed", type=int, default=42,
+              help="Random seed for reproducibility (default: 42)")
+@click.option("--output", "-o", default=None,
+              help="Save simulation report to markdown file")
+def simulate(dollars, years, simulations, seed, output):
+    """Run scenario analysis and Monte Carlo simulation on your investment.
+
+    Projects likely returns for DOLLARS invested in a coattail strategy
+    across bull, base, bear, and crash scenarios, then runs a Monte Carlo
+    simulation to estimate probability-weighted outcomes.
+
+    \b
+    Examples:
+      python main.py simulate 20000
+      python main.py simulate 20000 --years 10
+      python main.py simulate 50000 -y 5 -n 50000 -o projection.md
+    """
+    from reporter import generate_simulation_markdown, print_simulation
+    from simulator import run_full_simulation
+
+    if dollars <= 0:
+        console.print("[red]Investment amount must be positive.[/red]")
+        return
+
+    console.print(
+        f"[bold cyan]Running scenario analysis for ${dollars:,.2f} "
+        f"over {years} years...[/bold cyan]"
+    )
+
+    report = run_full_simulation(
+        initial=dollars,
+        years=years,
+        num_simulations=simulations,
+        seed=seed,
+    )
+
+    print_simulation(report)
+
+    if output:
+        generate_simulation_markdown(report, output)
+        console.print(f"\n[green]Simulation report saved to: {output}[/green]")
 
 
 if __name__ == "__main__":
