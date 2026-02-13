@@ -598,3 +598,62 @@ def find_stock_across_investors(
         "total_tracked": len(TRACKED_INVESTORS),
         "holders": holders,
     }
+
+
+# ─── Ticker Resolution ──────────────────────────────────────────────────────
+
+
+def resolve_consensus_tickers(consensus: dict) -> dict:
+    """
+    Resolve CUSIP-based tickers to real stock symbols across all consensus
+    lists.  Uses yfinance for validation so every displayed stock has a
+    proper ticker rather than a raw CUSIP.
+
+    Mutates the consensus dict in place and returns it.
+    """
+    from allocator import _build_ticker_candidates
+
+    import yfinance as yf
+
+    # Cache so we only hit yfinance once per issuer
+    resolved: dict[str, str] = {}
+
+    def _resolve(ticker: str, name: str) -> str:
+        """Return a valid ticker or the original value."""
+        if ticker in resolved:
+            return resolved[ticker]
+
+        # Already a valid-looking ticker (1-5 alpha chars)
+        if ticker and 1 <= len(ticker) <= 5 and ticker.isalpha():
+            resolved[ticker] = ticker
+            return ticker
+
+        # Looks like a CUSIP – try to resolve
+        candidates = _build_ticker_candidates(ticker, name)
+        for candidate in candidates:
+            try:
+                stock = yf.Ticker(candidate)
+                info = stock.info or {}
+                price = info.get("regularMarketPrice") or info.get("currentPrice")
+                if price and price > 0:
+                    resolved[ticker] = candidate.upper()
+                    return candidate.upper()
+            except Exception:
+                continue
+
+        resolved[ticker] = ticker
+        return ticker
+
+    # Resolve tickers in every list that appears on the consensus page
+    for key in (
+        "top_consensus", "all_consensus", "new_consensus_picks",
+        "high_conviction_overlap", "smart_money_momentum",
+        "exit_warnings", "watchlist",
+    ):
+        items = consensus.get(key, [])
+        for item in items:
+            old_ticker = item.get("ticker", "")
+            name = item.get("name", "")
+            item["ticker"] = _resolve(old_ticker, name)
+
+    return consensus

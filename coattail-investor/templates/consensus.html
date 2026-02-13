@@ -47,15 +47,15 @@
             <table class="table table-hover mb-0">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Ticker</th>
-                        <th>Company</th>
-                        <th class="text-center">Holders</th>
-                        <th class="text-end">Avg Weight</th>
-                        <th class="text-center">Direction</th>
-                        <th class="text-center">Signal</th>
-                        <th class="text-end">Score</th>
-                        <th>Held By</th>
+                        <th title="Rank by consensus score">#</th>
+                        <th title="Stock ticker symbol">Ticker</th>
+                        <th title="Company name from SEC filings">Company</th>
+                        <th class="text-center" title="Number of tracked institutional investors currently holding this stock vs. total tracked">Holders</th>
+                        <th class="text-end" title="Average portfolio weight (%) of this stock across all holders">Avg Weight</th>
+                        <th class="text-center" title="Whether investors are collectively adding, reducing, or holding steady positions">Direction</th>
+                        <th class="text-center" title="Valuation signal based on price change since the filing quarter-end: GREEN (≤10%), YELLOW (10-25%), RED (>25%)">Signal</th>
+                        <th class="text-end" title="Consensus score = number of holders × average portfolio weight × direction multiplier">Score</th>
+                        <th title="Names of institutional investors holding this stock">Held By</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -103,7 +103,7 @@
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead>
-                            <tr><th>Ticker</th><th>Company</th><th class="text-center">Initiators</th><th>Who</th></tr>
+                            <tr><th title="Stock ticker symbol">Ticker</th><th title="Company name">Company</th><th class="text-center" title="Number of investors who initiated a new position this quarter">Initiators</th><th title="Names of investors who initiated positions">Who</th></tr>
                         </thead>
                         <tbody>
                             {% for pick in consensus.new_consensus_picks %}
@@ -132,7 +132,7 @@
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead>
-                            <tr><th>Ticker</th><th>Company</th><th class="text-center">In Top 10 Of</th><th class="text-end">Avg Weight</th></tr>
+                            <tr><th title="Stock ticker symbol">Ticker</th><th title="Company name">Company</th><th class="text-center" title="Number of investors who hold this stock in their top 10 positions by weight">In Top 10 Of</th><th class="text-end" title="Average portfolio weight among investors with this in their top 10">Avg Weight</th></tr>
                         </thead>
                         <tbody>
                             {% for pick in consensus.high_conviction_overlap %}
@@ -161,7 +161,7 @@
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead>
-                            <tr><th>Ticker</th><th>Company</th><th class="text-center"># Increasing</th><th>Who</th></tr>
+                            <tr><th title="Stock ticker symbol">Ticker</th><th title="Company name">Company</th><th class="text-center" title="Number of investors who increased their position by 20%+ this quarter"># Increasing</th><th title="Names of investors who increased positions">Who</th></tr>
                         </thead>
                         <tbody>
                             {% for pick in consensus.smart_money_momentum %}
@@ -190,7 +190,7 @@
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead>
-                            <tr><th>Ticker</th><th>Company</th><th class="text-center"># Reducing</th><th class="text-end">Avg Reduction</th></tr>
+                            <tr><th title="Stock ticker symbol">Ticker</th><th title="Company name">Company</th><th class="text-center" title="Number of investors who reduced or exited their position this quarter"># Reducing</th><th class="text-end" title="Average percentage reduction across investors who sold">Avg Reduction</th></tr>
                         </thead>
                         <tbody>
                             {% for pick in consensus.exit_warnings %}
@@ -219,15 +219,15 @@
             <table class="table table-hover mb-0">
                 <thead>
                     <tr>
-                        <th>Rank</th>
-                        <th>Ticker</th>
-                        <th>Company</th>
-                        <th class="text-center">Holders</th>
-                        <th class="text-end">Avg Weight</th>
-                        <th class="text-center">Direction</th>
-                        <th class="text-center">Signal</th>
-                        <th class="text-end">Score</th>
-                        <th>Rationale</th>
+                        <th title="Position in watchlist ranked by consensus score">Rank</th>
+                        <th title="Stock ticker symbol">Ticker</th>
+                        <th title="Company name from SEC filings">Company</th>
+                        <th class="text-center" title="Number of tracked institutional investors holding this stock">Holders</th>
+                        <th class="text-end" title="Average portfolio weight (%) across all holders">Avg Weight</th>
+                        <th class="text-center" title="Whether investors are collectively adding, reducing, or holding steady">Direction</th>
+                        <th class="text-center" title="Valuation signal: GREEN (≤10% price move since filing), YELLOW (10-25%), RED (>25%)">Signal</th>
+                        <th class="text-end" title="Consensus score = holders × avg weight × direction multiplier">Score</th>
+                        <th title="Brief explanation of why this stock is on the watchlist">Rationale</th>
                     </tr>
                 </thead>
                 <tbody>

@@ -100,6 +100,14 @@ body {
     border-bottom: 1px solid var(--border-color);
 }
 
+/* ─── Tooltips on table headers ───────────────────────────────────────────── */
+
+.table th[title] {
+    cursor: help;
+    text-decoration: underline dotted rgba(255,255,255,0.25);
+    text-underline-offset: 3px;
+}
+
 /* ─── Badges ──────────────────────────────────────────────────────────────── */
 
 .badge-category {

@@ -155,8 +155,10 @@ def screen_watchlist(
     for i, item in enumerate(watchlist):
         ticker = item.get("ticker", "")
 
-        # Skip non-ticker identifiers (CUSIPs, etc.)
-        if not ticker or len(ticker) > 5 or not ticker.isalpha():
+        # Skip identifiers that are clearly CUSIPs (9+ alphanumeric, no
+        # alpha-only match).  Allow tickers with hyphens like BRK-B.
+        clean = ticker.replace("-", "").replace(".", "")
+        if not ticker or len(clean) > 5 or (len(clean) >= 6 and not clean.isalpha()):
             item["valuation"] = {
                 "signal": "UNKNOWN",
                 "signal_emoji": "?",
@@ -209,8 +211,17 @@ def enrich_consensus_with_valuation(consensus: dict) -> dict:
     # Screen top consensus picks
     if consensus.get("top_consensus"):
         for pick in consensus["top_consensus"]:
+            if pick.get("valuation"):
+                continue  # Already enriched via watchlist
             ticker = pick.get("ticker", "")
-            if ticker and len(ticker) <= 5 and ticker.isalpha():
+            clean = ticker.replace("-", "").replace(".", "")
+            if ticker and len(clean) <= 5:
                 pick["valuation"] = get_valuation_data(ticker, quarter_end)
+            else:
+                pick["valuation"] = {
+                    "signal": "UNKNOWN",
+                    "signal_emoji": "?",
+                    "error": "No valid ticker",
+                }
 
     return consensus

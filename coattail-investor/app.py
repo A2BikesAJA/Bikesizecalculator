@@ -153,7 +153,7 @@ def investor_detail(name):
 
 @app.route("/consensus")
 def consensus_page():
-    from analyzer import build_consensus
+    from analyzer import build_consensus, resolve_consensus_tickers
 
     all_data = _load_cached_data()
     if not any(v for v in all_data.values()):
@@ -161,7 +161,13 @@ def consensus_page():
 
     consensus = build_consensus(all_data)
 
-    # Try to enrich with valuation data (non-blocking)
+    # Resolve CUSIPs to real tickers so every row shows a symbol
+    try:
+        consensus = resolve_consensus_tickers(consensus)
+    except Exception as e:
+        logger.warning(f"Ticker resolution failed: {e}")
+
+    # Enrich with valuation signals (every stock must have a signal)
     try:
         from valuation import enrich_consensus_with_valuation
         consensus = enrich_consensus_with_valuation(consensus)
@@ -230,6 +236,12 @@ def allocate_page():
                     error = "No cached data. Fetch filings first."
                 else:
                     consensus = build_consensus(all_data)
+
+                    try:
+                        from analyzer import resolve_consensus_tickers
+                        consensus = resolve_consensus_tickers(consensus)
+                    except Exception:
+                        pass
 
                     try:
                         from valuation import enrich_consensus_with_valuation
@@ -439,6 +451,13 @@ def signals_page():
         )
 
     consensus = build_consensus(all_data)
+
+    try:
+        from analyzer import resolve_consensus_tickers
+        consensus = resolve_consensus_tickers(consensus)
+    except Exception:
+        pass
+
     watchlist = consensus.get("watchlist", [])
     if not watchlist:
         return render_template(
@@ -456,7 +475,8 @@ def signals_page():
         for item in watchlist[:10]:  # Top 10 for performance
             ticker = item.get("ticker", "")
             name = item.get("name", "")
-            if not ticker or len(ticker) > 5 or not ticker.isalpha():
+            clean = ticker.replace("-", "").replace(".", "")
+            if not ticker or len(clean) > 5 or len(clean) < 1:
                 continue
 
             # Run analysis

@@ -78,7 +78,7 @@
         <div class="metric-value {% if allocation.cash_remaining > 1 %}text-warning{% else %}text-muted{% endif %}">{{ allocation.cash_remaining|currency }}</div>
         <div class="metric-label">Cash Remaining</div>
     </div>
-    <div class="card card-metric">
+    <div class="card card-metric" title="Effective number of positions measured by the Herfindahl index — lower than actual count means the portfolio is concentrated in a few holdings">
         <div class="metric-value">{{ allocation.effective_positions }}</div>
         <div class="metric-label">Effective Positions</div>
     </div>
@@ -93,14 +93,14 @@
             <table class="table table-hover mb-0">
                 <thead>
                     <tr>
-                        <th style="width:30px">#</th>
-                        <th>Action</th>
-                        <th>Type</th>
-                        <th class="text-end">Limit Price</th>
-                        <th class="text-end">Shares</th>
-                        <th class="text-end">Est. Cost</th>
-                        <th class="text-end">Weight</th>
-                        <th class="text-center">Trend</th>
+                        <th style="width:30px" title="Order number">#</th>
+                        <th title="Buy action — ticker and company name">Action</th>
+                        <th title="Security type: Stock, ETF, or Mutual Fund">Type</th>
+                        <th class="text-end" title="Current market price — use as limit price for your order">Limit Price</th>
+                        <th class="text-end" title="Number of shares to purchase (whole or fractional depending on settings)">Shares</th>
+                        <th class="text-end" title="Estimated total cost for this position (shares × price)">Est. Cost</th>
+                        <th class="text-end" title="This position's percentage weight in the overall portfolio">Weight</th>
+                        <th class="text-center" title="Whether institutional investors are adding, reducing, or holding steady">Trend</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -231,13 +231,13 @@
                     <table class="table table-hover mb-0">
                         <thead>
                             <tr>
-                                <th>Ticker</th>
-                                <th>Type</th>
-                                <th class="text-end">Score</th>
-                                <th class="text-end">Holders</th>
-                                <th class="text-end">Avg Wt%</th>
-                                <th class="text-center">Signal</th>
-                                <th class="text-end">Target $</th>
+                                <th title="Stock ticker symbol">Ticker</th>
+                                <th title="Security type: Stock, ETF, or Mutual Fund">Type</th>
+                                <th class="text-end" title="Consensus score = holders × avg weight × direction multiplier">Score</th>
+                                <th class="text-end" title="Number of tracked institutional investors holding this stock">Holders</th>
+                                <th class="text-end" title="Average portfolio weight (%) across all institutional holders">Avg Wt%</th>
+                                <th class="text-center" title="Valuation signal: GREEN (≤10% price move since filing), YELLOW (10-25%), RED (>25%)">Signal</th>
+                                <th class="text-end" title="Target dollar amount to allocate to this position">Target $</th>
                             </tr>
                         </thead>
                         <tbody>
